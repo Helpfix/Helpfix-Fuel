@@ -41,6 +41,13 @@ public class TrackingService extends Service implements LocationListener {
     private static final int NOTIFICATION_ID=73;
     private LocationManager lm;
     private Location previous;
+    static String radarBanner = "";
+    private RadarAlerts radarAlerts;
+    private final Runnable clearRadar = () -> {
+        radarBanner = "";
+        updateOverlay();
+    };
+    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private long lastFixElapsed=0L;
     private WindowManager windowManager;
     private FrameLayout floating;
@@ -60,7 +67,9 @@ public class TrackingService extends Service implements LocationListener {
         // Service is foreground to keep GPS alive while map is on screen.
         makeForeground();
         if(START.equals(action)){
-            FuelStore.prefs(this).edit().putBoolean("active",true).putFloat("speed",0).apply();
+            if (!FuelStore.active(this) || lm == null) {
+                FuelStore.prefs(this).edit().putBoolean("active",true).putFloat("speed",0).apply();
+            }
             startLocation();
         } else if(FuelStore.active(this)) startLocation();
         if(SHOW.equals(action))addOverlay();
@@ -109,6 +118,10 @@ public class TrackingService extends Service implements LocationListener {
                 }
             }
         }
+        if (radarAlerts == null) radarAlerts = new RadarAlerts(this);
+        radarBanner = radarAlerts.update(this, loc, previous, speed);
+        main.removeCallbacks(clearRadar);
+        if (!radarBanner.isEmpty()) main.postDelayed(clearRadar, 10_000);
         previous=loc;
         lastFixElapsed=SystemClock.elapsedRealtime();
         float consumption=Math.max(1,FuelStore.get(this,"km_per_l",14f));
@@ -174,10 +187,18 @@ public class TrackingService extends Service implements LocationListener {
         if(dashboard==null)return;
         float fuel=FuelStore.get(this,"liters",15), kmPerLiter=FuelStore.get(this,"km_per_l",14), tank=FuelStore.get(this,"capacity",46);
         dashboard.setAccent(FuelStore.accent(this));
+        dashboard.setRadarBanner(radarBanner);
         dashboard.setMetrics(FuelStore.get(this,"speed",0),fuel,fuel*kmPerLiter,tank,
-            FuelStore.get(this,"distance",0),FuelStore.active(this));
+            FuelStore.get(this,"distance",0),FuelStore.active(this),FuelStore.odometer(this));
     }
     private void removeOverlay(){if(floating!=null){try{windowManager.removeView(floating);}catch(Exception ignored){}
         floating=null;dashboard=null;}}
-    @Override public void onDestroy(){stopLocation();removeOverlay();super.onDestroy();}
+    @Override public void onDestroy(){
+        stopLocation();
+        main.removeCallbacks(clearRadar);
+        radarBanner = "";
+        if (radarAlerts != null) radarAlerts.close();
+        removeOverlay();
+        super.onDestroy();
+    }
 }

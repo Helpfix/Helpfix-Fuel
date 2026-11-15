@@ -24,17 +24,24 @@ public final class SportGaugeView extends View {
     private static final int MUTED = 0xff7896ae;
     private int accent = 0xff00d5ff;
     private float speed = 0f, liters = 15f, capacity = 46f, autonomy = 210f, distance = 0f;
+    private static final Locale BR = Locale.forLanguageTag("pt-BR");
+    private double odometer = Double.NaN;
     private boolean active = false, compact = false;
+    private String radarBanner = "";
     private final Typeface bold = Typeface.create("sans-serif-condensed", Typeface.BOLD);
     private final Typeface normal = Typeface.create("sans-serif", Typeface.NORMAL);
 
     public SportGaugeView(Context c) { super(c); setLayerType(View.LAYER_TYPE_SOFTWARE, null); }
     public void setCompact(boolean value) { compact = value; invalidate(); }
     public void setAccent(int value) { accent = value; invalidate(); }
-    public void setMetrics(float velocity, float remaining, float range, float tank) {
-        setMetrics(velocity, remaining, range, tank, distance, active);
+    public void setRadarBanner(String value) {
+        if (value.equals(radarBanner)) return;
+        radarBanner = value;
+        invalidate();
     }
-    public void setMetrics(float velocity, float remaining, float range, float tank, float driven, boolean tripActive) {
+    public void setMetrics(float velocity, float remaining, float range, float tank,
+            float driven, boolean tripActive, double odometerKm) {
+        odometer = odometerKm;
         speed = clamp(velocity, 0f, 240f);
         liters = Math.max(0f, remaining);
         capacity = Math.max(1f, tank);
@@ -60,43 +67,90 @@ public final class SportGaugeView extends View {
     @Override protected void onDraw(Canvas screen){
         super.onDraw(screen);
         if(getWidth() == 0 || getHeight() == 0) return;
-        final float W=1000f,H=560f;
-        float scale=Math.min(getWidth()/W, getHeight()/H);
+        final float height = 560f;
+        float scale = compact ? Math.min(getWidth() / 1000f, getHeight() / height)
+                : getHeight() / height;
+        float width = compact ? 1000f : getWidth() / scale;
         screen.drawColor(0xff040911);
         screen.save();
-        screen.translate((getWidth()-W*scale)*0.5f,(getHeight()-H*scale)*0.5f);
-        screen.scale(scale,scale);
-        Canvas c=screen;
+        screen.translate((getWidth() - width * scale) / 2, (getHeight() - height * scale) / 2);
+        screen.scale(scale, scale);
+        Canvas c = screen;
+        float middle = width / 2;
+        float centerWidth = width * .21f;
+        float leftDial = (width - centerWidth) / 4;
+        float rightDial = width - leftDial;
+        float radius = Math.min(184f, leftDial - 13f);
 
         fill(0xff07101b);
-        p.setShader(new LinearGradient(0,0,0,H,0xff101b28,0xff01050b,Shader.TileMode.CLAMP));
-        c.drawRoundRect(new RectF(7,7,993,553),41,41,p);p.setShader(null);
-        border(c,new RectF(9,9,991,551),0xff415b70,6,40);
-        border(c,new RectF(18,18,982,542),0xff0e2d44,2,32);
-        stroke(alpha(accent,48),1.3f);
-        c.drawLine(37,82,963,82,p);
+        p.setShader(new LinearGradient(0, 0, 0, height, 0xff101b28, 0xff01050b, Shader.TileMode.CLAMP));
+        c.drawRoundRect(2, 2, width - 2, height - 2, 28, 28, p);
+        p.setShader(null);
+        border(c, new RectF(4, 4, width - 4, height - 4), 0xff415b70, 3, 26);
+        line(c, 14, 77, width - 14, 77, alpha(accent, 68), 1.3f);
 
-        text(c,"HELPFIX FUEL",500,53,25,WHITE,true);
-        text(c,"PAINEL AUTOMOTIVO  •  GPS",500,74,13,0xff69b3d4,false);
-        text(c,"VELOCIDADE GPS",242,116,18,0xffdceefa,true);
-        text(c,"COMBUSTÍVEL ESTIMADO",758,116,18,0xffdceefa,true);
+        float menuWidth = compact ? 0 : 130 * getResources().getDisplayMetrics().density / scale;
+        float headerWidth = Math.max(24, width - 2 * menuWidth);
+        fittedText(c, "HELPFIX FUEL", middle, 37, 25, headerWidth, WHITE);
+        if (active && !radarBanner.isEmpty()) {
+            float halfBanner = Math.min(230, Math.min(width * .28f, headerWidth / 2));
+            fill(0xff4d300b);
+            c.drawRoundRect(middle - halfBanner, 46, middle + halfBanner, 70, 8, 8, p);
+            fittedText(c, radarBanner, middle, 63, 17, halfBanner * 2 - 16, 0xffffd68f);
+        } else {
+            fittedText(c, "PAINEL AUTOMOTIVO  •  GPS", middle, 62, 13, headerWidth, 0xff69b3d4);
+        }
 
-        drawDial(c,242,293,177,240f,speed,true);
-        drawDial(c,758,293,177,100f,clamp(liters/capacity*100f,0f,100f),false);
-        drawCenter(c);
+        fittedText(c, "VELOCIDADE GPS", leftDial, 97, 18, leftDial * 1.8f, WHITE);
+        fittedText(c, "COMBUSTÍVEL ESTIMADO", rightDial, 97, 18, leftDial * 1.8f, WHITE);
+        if (radius > 12) {
+            dialAt(c, leftDial, 299, radius, 240f, speed, true);
+            dialAt(c, rightDial, 299, radius, 100f, clamp(liters / capacity * 100f, 0f, 100f), false);
+        }
 
-        fill(0xff091927);c.drawRoundRect(new RectF(47,474,953,527),12,12,p);
-        border(c,new RectF(47,474,953,527),0xff1b445d,1,12);
-        text(c,"VIAGEM",102,496,12,MUTED,false);
-        text(c,active?"ATIVA":"PARADA",103,515,17,active?0xff5fe9b9:0xffafc0cf,true);
-        text(c,"DISTÂNCIA",301,496,12,MUTED,false);
-        text(c,String.format(Locale.getDefault(),"%.1f km",distance),301,515,18,WHITE,true);
-        text(c,"VELOCIDADE",542,496,12,MUTED,false);
-        text(c,String.format(Locale.getDefault(),"%.0f km/h",speed),542,515,18,WHITE,true);
-        text(c,"COMBUSTÍVEL",807,496,12,MUTED,false);
-        text(c,String.format(Locale.getDefault(),"%.1f L",liters),807,515,18,WHITE,true);
-        if(!compact)text(c,"Os valores de combustível e autonomia são estimados; não são leituras do veículo.",500,541,11,0xff7b93a5,false);
+        c.save();
+        float centerScale = Math.min(1.35f, (centerWidth - 8) / 168f);
+        if (centerScale > 0) {
+            c.translate(middle, 308);
+            c.scale(centerScale, centerScale);
+            c.translate(-500, -316);
+            drawCenter(c);
+        }
         c.restore();
+
+        fill(0xff091927);
+        c.drawRoundRect(12, 500, width - 12, 550, 12, 12, p);
+        border(c, new RectF(12, 500, width - 12, 550), 0xff1b445d, 1, 12);
+        float column = (width - 24) / 4;
+        metric(c, 12 + column * .5f, column, "VIAGEM", active ? "ATIVA" : "PARADA",
+                active ? 0xff5fe9b9 : 0xffafc0cf);
+        metric(c, 12 + column * 1.5f, column, "DISTÂNCIA GPS", String.format(BR, "%,.1f km", distance), WHITE);
+        String km = Double.isFinite(odometer) ? String.format(BR, "%,.1f km", odometer) : "—";
+        metric(c, 12 + column * 2.5f, column, "ODÔMETRO", km, WHITE);
+        metric(c, 12 + column * 3.5f, column, "COMBUSTÍVEL EST.", String.format(BR, "%.1f L", liters), WHITE);
+        c.restore();
+    }
+
+    private void dialAt(Canvas c, float x, float y, float radius, float max, float value, boolean velocity) {
+        c.save();
+        c.translate(x, y);
+        c.scale(radius / 177, radius / 177);
+        drawDial(c, 0, 0, 177, max, value, velocity);
+        c.restore();
+    }
+
+    private void metric(Canvas c, float x, float width, String label, String value, int color) {
+        fittedText(c, label, x, 518, 13, width - 12, MUTED);
+        fittedText(c, value, x, 540, 21, width - 12, color);
+    }
+
+    private void fittedText(Canvas c, String value, float x, float y, float size, float maxWidth, int color) {
+        if (maxWidth <= 0) return;
+        p.setTypeface(bold);
+        p.setTextSize(size);
+        float measured = p.measureText(value);
+        if (measured > maxWidth) size *= maxWidth / measured;
+        text(c, value, x, y, size, color, true);
     }
 
     private void drawDial(Canvas c,float cx,float cy,float r,float max,float value,boolean velocity){

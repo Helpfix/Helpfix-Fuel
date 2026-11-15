@@ -44,8 +44,8 @@ final class FuelCosts {
     static List<Fill> saveFill(List<Fill> fills, Fill fill, boolean replaceLast) {
         List<Fill> updated = new ArrayList<>(fills);
         if (replaceLast) updated.remove(updated.size() - 1);
-        if (!updated.isEmpty() && fill.odometer() <= updated.get(updated.size() - 1).odometer()) {
-            throw new IllegalArgumentException("O odômetro precisa ser maior que o do registro anterior.");
+        if (!updated.isEmpty() && fill.odometer() < updated.get(updated.size() - 1).odometer()) {
+            throw new IllegalArgumentException("O odômetro precisa ser igual ou maior que o do registro anterior.");
         }
         updated.add(fill);
         return updated;
@@ -64,9 +64,12 @@ final class FuelCosts {
                 intervalLiters += fill.liters();
                 intervalPaid += fill.paid();
                 if (fill.fullTank()) {
-                    distance += fill.odometer() - start.odometer();
-                    liters += intervalLiters;
-                    paid += intervalPaid;
+                    double intervalDistance = fill.odometer() - start.odometer();
+                    if (intervalDistance > 0) {
+                        distance += intervalDistance;
+                        liters += intervalLiters;
+                        paid += intervalPaid;
+                    }
                     intervalLiters = 0;
                     intervalPaid = 0;
                 }
@@ -78,6 +81,17 @@ final class FuelCosts {
 
     static double litersFor(double distance, double kmPerLiter) {
         return distance / kmPerLiter;
+    }
+
+    static float tankAfterFill(double before, float capacity, Fill fill) {
+        return fill.fullTank() ? capacity : (float) Math.min(capacity, before + fill.liters());
+    }
+
+    static double paidAmount(double liters, double price, boolean byLiter) {
+        if (!byLiter) return price;
+        double cents = liters * price * 100;
+        if (!Double.isFinite(cents) || cents >= Long.MAX_VALUE) return Double.NaN;
+        return Math.round(cents) / 100.0;
     }
 
     private FuelCosts() {}

@@ -2,6 +2,7 @@ package br.com.helpfix.fuelsport;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.SharedPreferences;
 import android.graphics.drawable.GradientDrawable;
 import android.text.Editable;
 import android.text.InputType;
@@ -13,6 +14,9 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -29,11 +33,24 @@ final class FuelCostMenu {
     private static final int MUTED = 0xFFB5CDDC;
     private static final int CYAN = 0xFF77DFFF;
     private static final String FILLS_KEY = "cost_fillups";
+    static final String LAST_FILL_CREDIT = "last_fill_credit";
 
     private final Activity activity;
+    private final Runnable dashboardChanged;
 
-    FuelCostMenu(Activity activity) {
+    FuelCostMenu(Activity activity, Runnable dashboardChanged) {
         this.activity = activity;
+        this.dashboardChanged = dashboardChanged;
+    }
+
+    void newFill() {
+        try {
+            editFill(loadFills(), null, false);
+        } catch (JSONException | IllegalArgumentException e) {
+            new AlertDialog.Builder(activity).setTitle("Novo abastecimento")
+                    .setMessage("Não foi possível abrir o histórico de abastecimentos.")
+                    .setPositiveButton("Fechar", null).show();
+        }
     }
 
     void show() {
@@ -86,7 +103,7 @@ final class FuelCostMenu {
         refresh.run();
 
         heading(body, "Abastecimentos recentes");
-        TextView description = text(body, "Registre a quilometragem do odômetro, os litros e o total pago. O saldo do painel é ajustado pelo menu Combustível e consumo.", 13, MUTED);
+        TextView description = text(body, "Cada novo registro soma os litros ao saldo do painel e atualiza o preço usado no simulador.", 13, MUTED);
         description.setPadding(0, 0, 0, dp(4));
         if (latest != null) {
             for (int i = fills.size() - 1; i >= Math.max(0, fills.size() - 5); i--) {
@@ -101,9 +118,9 @@ final class FuelCostMenu {
 
         AlertDialog.Builder builder = new AlertDialog.Builder(activity).setTitle(TITLE)
                 .setView(scroll(body)).setNegativeButton("Fechar", null)
-                .setPositiveButton("Registrar", (dialog, which) -> editFill(fills, null));
+                .setPositiveButton("Registrar", (dialog, which) -> editFill(fills, null, true));
         if (latest != null) builder.setNeutralButton("Editar último",
-                (dialog, which) -> editFill(fills, latest));
+                (dialog, which) -> editFill(fills, latest, true));
         builder.show();
     }
 
@@ -143,15 +160,42 @@ final class FuelCostMenu {
         result.setText(resultText);
     }
 
-    private void editFill(List<FuelCosts.Fill> fills, FuelCosts.Fill current) {
+    private void editFill(List<FuelCosts.Fill> fills, FuelCosts.Fill current, boolean returnToCosts) {
         boolean editing = current != null;
         LinearLayout body = body();
-        EditText odometer = field(body, "Odômetro do carro (km)",
-                editing ? format("%.1f", current.odometer()) : "", "Sem separador de milhar");
+        double km = editing ? current.odometer() : FuelStore.odometer(activity);
+        EditText odometer = field(body, "Odômetro do carro (km, sem separador de milhar)",
+                Double.isFinite(km) ? format("%.1f", km) : "", "Ex. 202621");
         EditText liters = field(body, "Litros abastecidos",
                 editing ? format("%.3f", current.liters()) : "", "Ex. 15,285");
+        RadioGroup priceMode = new RadioGroup(activity);
+        RadioButton perLiter = new RadioButton(activity);
+        if (!editing) {
+            priceMode.setOrientation(RadioGroup.HORIZONTAL);
+            RadioButton total = new RadioButton(activity);
+            total.setId(android.view.View.generateViewId());
+            total.setText("Valor total");
+            total.setTextColor(WHITE);
+            perLiter.setId(android.view.View.generateViewId());
+            perLiter.setText("Preço por litro");
+            perLiter.setTextColor(WHITE);
+            priceMode.addView(total);
+            priceMode.addView(perLiter);
+            body.addView(priceMode);
+            priceMode.check(total.getId());
+        }
+        int priceLabelIndex = body.getChildCount();
         EditText paid = field(body, "Valor pago (R$)",
                 editing ? format("%.2f", current.paid()) : "", "Ex. 100,00");
+        if (!editing) {
+            TextView priceLabel = (TextView) body.getChildAt(priceLabelIndex);
+            priceMode.setOnCheckedChangeListener((group, checked) -> {
+                boolean byLiter = checked == perLiter.getId();
+                priceLabel.setText(byLiter ? "Preço da gasolina (R$/L)" : "Valor pago (R$)");
+                paid.setHint(byLiter ? "Ex. 6,35" : "Ex. 100,00");
+                paid.setText("");
+            });
+        }
         CheckBox full = new CheckBox(activity);
         full.setText("Completei o tanque");
         full.setTextColor(WHITE);
@@ -160,20 +204,26 @@ final class FuelCostMenu {
         TextView error = text(body, "", 14, 0xFFFF99A0);
         ScrollView formScroll = scroll(body);
         AlertDialog form = new AlertDialog.Builder(activity)
-                .setTitle(editing ? "Editar último abastecimento" : "Registrar abastecimento")
-                .setView(formScroll).setNegativeButton("Voltar", null)
+                .setTitle(editing ? "Editar último abastecimento" : "Novo abastecimento")
+                .setView(formScroll).setNegativeButton(returnToCosts ? "Voltar" : "Cancelar", null)
                 .setPositiveButton("Salvar", null).create();
-        form.setOnCancelListener(dialog -> show());
+        form.setOnCancelListener(dialog -> { if (returnToCosts) show(); });
         form.setOnShowListener(dialog -> {
             form.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(view -> {
                 form.dismiss();
-                show();
+                if (returnToCosts) show();
             });
             form.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+                FuelCosts.Fill fill;
                 try {
-                    FuelCosts.Fill fill = new FuelCosts.Fill(read(odometer), read(liters),
-                            read(paid), full.isChecked());
-                    saveFills(FuelCosts.saveFill(fills, fill, editing));
+                    double volume = read(liters);
+                    double value = read(paid);
+                    fill = new FuelCosts.Fill(read(odometer), volume,
+                            FuelCosts.paidAmount(volume, value, perLiter.isChecked()), full.isChecked());
+                    if (!FuelStore.validOdometer(fill.odometer())) {
+                        throw new IllegalArgumentException("Confira a quilometragem do painel.");
+                    }
+                    saveFills(FuelCosts.saveFill(fills, fill, editing), fill, editing);
                 } catch (IllegalArgumentException e) {
                     error.setText(e.getMessage());
                     formScroll.post(() -> formScroll.smoothScrollTo(0, error.getBottom()));
@@ -183,8 +233,11 @@ final class FuelCostMenu {
                     formScroll.post(() -> formScroll.smoothScrollTo(0, error.getBottom()));
                     return;
                 }
+                dashboardChanged.run();
                 form.dismiss();
-                show();
+                if (returnToCosts) show();
+                else Toast.makeText(activity, format("Abastecimento salvo · R$ %.3f/L",
+                        fill.pricePerLiter()), Toast.LENGTH_SHORT).show();
             });
         });
         form.show();
@@ -201,7 +254,7 @@ final class FuelCostMenu {
         return fills;
     }
 
-    private void saveFills(List<FuelCosts.Fill> fills) throws JSONException {
+    private void saveFills(List<FuelCosts.Fill> fills, FuelCosts.Fill latest, boolean editing) throws JSONException {
         JSONArray entries = new JSONArray();
         for (FuelCosts.Fill fill : fills) {
             JSONObject entry = new JSONObject();
@@ -211,7 +264,27 @@ final class FuelCostMenu {
             entry.put("fullTank", fill.fullTank());
             entries.put(entry);
         }
-        FuelStore.prefs(activity).edit().putString(FILLS_KEY, entries.toString()).apply();
+        SharedPreferences prefs = FuelStore.prefs(activity);
+        SharedPreferences.Editor editor = prefs.edit().putString(FILLS_KEY, entries.toString());
+        float capacity = prefs.getFloat("capacity", 46f);
+        float balance = prefs.getFloat("liters", 15f);
+        if ((!editing || prefs.contains(FuelStore.INTEGRATED_FILL)) && latest.liters() > capacity) {
+            throw new IllegalArgumentException("Os litros abastecidos excedem a capacidade configurada do tanque.");
+        }
+        if (!editing) {
+            float after = FuelCosts.tankAfterFill(balance, capacity, latest);
+            editor.putFloat("liters", after)
+                    .putFloat(FuelStore.INTEGRATED_FILL, balance)
+                    .putFloat(LAST_FILL_CREDIT, after - balance);
+            FuelStore.setOdometer(activity, editor, latest.odometer());
+        } else if (prefs.contains(FuelStore.INTEGRATED_FILL)) {
+            float before = prefs.getFloat(FuelStore.INTEGRATED_FILL, 0);
+            float credit = FuelCosts.tankAfterFill(before, capacity, latest) - before;
+            float adjusted = balance + credit - prefs.getFloat(LAST_FILL_CREDIT, 0);
+            editor.putFloat("liters", Math.max(0, Math.min(capacity, adjusted)))
+                    .putFloat(LAST_FILL_CREDIT, credit);
+        }
+        editor.apply();
     }
 
     private LinearLayout body() {

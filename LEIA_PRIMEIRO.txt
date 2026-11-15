@@ -1,4 +1,4 @@
-HELPFIX FUEL | PAINEL AUTOMOTIVO 3.3.1
+HELPFIX FUEL | PAINEL AUTOMOTIVO 3.3.3
 
 Este ZIP e o codigo-fonte do Android, nao o APK ja compilado.
 Abra README.md para instalar via GitHub Desktop e compilar o APK via Actions.
@@ -11,3 +11,6 @@ Abra MENU > 5. Quanto custa rodar com o Celta? para registrar abastecimentos
 e simular custo de gasolina por quilometro, por viagem ou por entrega.
 
 O projeto nao foi publicado no seu GitHub. Teste em aparelho apos compilar.
+
+Use MENU > Ajustar odometro (km) e MENU > Novo abastecimento para
+atualizar a quilometragem e o saldo do tanque.

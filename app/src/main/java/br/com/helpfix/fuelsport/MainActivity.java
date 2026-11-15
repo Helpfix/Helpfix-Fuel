@@ -3,6 +3,7 @@ package br.com.helpfix.fuelsport;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -16,6 +17,8 @@ import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -38,6 +41,10 @@ public final class MainActivity extends Activity {
     private TextView menuHandle;
     private boolean menuOpen=false;
     private boolean pendingTrip=false,pendingOverlay=false,pendingSystemOverlay=false;
+    private Intent pendingNavigation;
+    private boolean navigationOverlay;
+    private static final String WAZE = "com.waze";
+    private static final String MAPS = "com.google.android.apps.maps";
     private final int CYAN=0xff00d7ff;
 
     private int dp(float n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
@@ -54,15 +61,44 @@ public final class MainActivity extends Activity {
     }
     private void fullscreen(){
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        getWindow().getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-        getWindow().setStatusBarColor(Color.BLACK);
-        getWindow().setNavigationBarColor(Color.BLACK);
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowManager.LayoutParams attributes = getWindow().getAttributes();
+            if (attributes.layoutInDisplayCutoutMode != WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS) {
+                attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+                getWindow().setAttributes(attributes);
+            }
+            getWindow().setDecorFitsSystemWindows(false);
+            WindowInsetsController bars = getWindow().getInsetsController();
+            if (bars != null) {
+                bars.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                bars.hide(WindowInsets.Type.systemBars());
+            }
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        }
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);fullscreen();
-        FrameLayout root=new FrameLayout(this);root.setBackgroundColor(0xff030910);setContentView(root);
+        if (state != null) {
+            pendingNavigation = state.getParcelable("pending_navigation");
+            navigationOverlay = state.getBoolean("navigation_overlay");
+        }
+        FrameLayout root=new FrameLayout(this);
+        root.setBackgroundColor(0xff040911);
+        if (Build.VERSION.SDK_INT >= 28) {
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.view.DisplayCutout cutout = insets.getDisplayCutout();
+                view.setPadding(cutout == null ? 0 : cutout.getSafeInsetLeft(),
+                        cutout == null ? 0 : cutout.getSafeInsetTop(),
+                        cutout == null ? 0 : cutout.getSafeInsetRight(),
+                        cutout == null ? 0 : cutout.getSafeInsetBottom());
+                return insets;
+            });
+        }
+        setContentView(root);
         dashboard=new SportGaugeView(this);
         root.addView(dashboard,new FrameLayout.LayoutParams(-1,-1));
 
@@ -72,7 +108,7 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams paneParams=new FrameLayout.LayoutParams(
             Math.min(dp(495),getResources().getDisplayMetrics().widthPixels-dp(24)),
             FrameLayout.LayoutParams.MATCH_PARENT,Gravity.RIGHT|Gravity.TOP);
-        paneParams.setMargins(0,dp(8),dp(8),dp(48));
+        paneParams.setMargins(0,dp(56),dp(8),dp(8));
         root.addView(menuPane,paneParams);
         menuPane.setVisibility(View.GONE);
         buildMenu();
@@ -81,11 +117,17 @@ public final class MainActivity extends Activity {
         menuHandle.setGravity(Gravity.CENTER);
         menuHandle.setTypeface(null,1);
         menuHandle.setBackground(rounded(0xf5071c29,0xff3184a2,12));
-        FrameLayout.LayoutParams handleParams=new FrameLayout.LayoutParams(dp(140),dp(37),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
-        handleParams.bottomMargin=dp(7);
+        FrameLayout.LayoutParams handleParams=new FrameLayout.LayoutParams(dp(114),dp(44),Gravity.TOP|Gravity.END);
+        handleParams.topMargin=dp(4);
+        handleParams.rightMargin=dp(8);
         root.addView(menuHandle,handleParams);
         menuHandle.setOnClickListener(v->toggleMenu());
         updateDashboard();
+    }
+    @Override protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        state.putParcelable("pending_navigation", pendingNavigation);
+        state.putBoolean("navigation_overlay", navigationOverlay);
     }
     private void toggleMenu(){
         menuOpen=!menuOpen;
@@ -100,14 +142,19 @@ public final class MainActivity extends Activity {
         LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(13),dp(2),dp(13),dp(12));scroll.addView(list);
         addAction(list,"▶  INICIAR VIAGEM (GPS)",0xff065573,()->startTrip());
+        addAction(list,"Novo abastecimento",0xff075167,
+                ()->new FuelCostMenu(this,this::refreshFuelDisplays).newFill());
+        addAction(list,"Ajustar odômetro (km)",0xff1c435b,this::odometerDialog);
         addAction(list,"▣  MOSTRAR SOBRE O WAZE / MAPS",0xff075167,()->showOverlay());
+        addAction(list,"Navegar com Waze ou Google Maps",0xff075167,this::navigationDialog);
+        addAction(list,"Avisos de radar",0xff1c435b,()->RadarSettings.show(this));
         addAction(list,"◻  OCULTAR PAINEL FLUTUANTE",0xff202f40,()->send(TrackingService.HIDE));
         addAction(list,"■  ENCERRAR VIAGEM",0xff552936,()->{
             if(FuelStore.active(this))send(TrackingService.STOP);
             FuelStore.prefs(this).edit().putBoolean("active",false).putFloat("speed",0).apply();
             updateDashboard();toast("Viagem encerrada");
         });
-        addAction(list,FuelCostMenu.TITLE,0xff075167,()->new FuelCostMenu(this).show());
+        addAction(list,FuelCostMenu.TITLE,0xff075167,()->new FuelCostMenu(this,this::refreshFuelDisplays).show());
         addAction(list,"⛽  AJUSTAR COMBUSTÍVEL E CONSUMO",0xff1c435b,()->fuelDialog());
         addAction(list,"✦  COR DO PAINEL",0xff1d394e,()->styleDialog());
         TextView notice=label("Velocidade: GPS do celular.\nCombustível (%), litros e autonomia (km) são ESTIMADOS a partir do abastecimento, consumo médio e distância registrada. Sem leitura do tanque/OBD.\n\nEvite configurar enquanto dirige.",12,0xffa9bfd0);
@@ -131,6 +178,38 @@ public final class MainActivity extends Activity {
         TextView t=label(title,13,0xffc1d8e9);t.setPadding(0,dp(10),0,dp(3));pane.addView(t);
         pane.addView(input,new LinearLayout.LayoutParams(-1,dp(40)));
     }
+    private void odometerDialog() {
+        LinearLayout inputs = new LinearLayout(this);
+        inputs.setOrientation(LinearLayout.VERTICAL);
+        inputs.setPadding(dp(18), 0, dp(18), dp(12));
+        double current = FuelStore.odometer(this);
+        EditText km = numeric(Double.isFinite(current) ? (float) current : 0);
+        km.setText(Double.isFinite(current) ? String.format(Locale.US, "%.1f", current) : "");
+        km.setHint("Ex. 202621");
+        km.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        field(inputs, "Quilometragem do carro (km, sem separador de milhar)", km);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Ajustar odômetro")
+                .setView(inputs).setNegativeButton("Cancelar", null)
+                .setPositiveButton("Salvar", null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(view -> {
+                    try {
+                        double value = FuelCosts.parseNumber(km.getText());
+                        FuelStore.setOdometer(this, FuelStore.prefs(this).edit(), value).apply();
+                    } catch (IllegalArgumentException e) {
+                        km.setError("Digite a quilometragem sem separador de milhar.");
+                        return;
+                    }
+                    refreshFuelDisplays();
+                    dialog.dismiss();
+                }));
+        dialog.show();
+    }
+
+    private void refreshFuelDisplays() {
+        updateDashboard();
+        if (FuelStore.active(this)) send(TrackingService.REFRESH);
+    }
     private void fuelDialog(){
         LinearLayout inputs=new LinearLayout(this);inputs.setOrientation(LinearLayout.VERTICAL);
         inputs.setPadding(dp(18),dp(5),dp(18),dp(8));inputs.setBackgroundColor(0xff112332);
@@ -153,7 +232,8 @@ public final class MainActivity extends Activity {
                 if(!Float.isFinite(l)||!Float.isFinite(c)||!Float.isFinite(k)||
                     c<=0||c>300||l<0||l>c||k<=0||k>100)throw new NumberFormatException();
                 FuelStore.prefs(this).edit().putFloat("liters",l).putFloat("capacity",c)
-                    .putFloat("km_per_l",k).apply();
+                    .putFloat("km_per_l",k).remove(FuelStore.INTEGRATED_FILL)
+                    .remove(FuelCostMenu.LAST_FILL_CREDIT).apply();
                 if(FuelStore.active(this))send(TrackingService.REFRESH);
                 updateDashboard();dialog.dismiss();toast("Abastecimento/consumo salvos");
             }catch(NumberFormatException e){toast("Verifique litros, capacidade e consumo");}
@@ -171,6 +251,79 @@ public final class MainActivity extends Activity {
                 updateDashboard();if(FuelStore.active(this))send(TrackingService.REFRESH);
                 d.dismiss();
             }).setNegativeButton("Cancelar",null).show();
+    }
+
+    private void navigationDialog() {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(18), dp(4), dp(18), dp(8));
+        EditText destination = new EditText(this);
+        destination.setSingleLine(true);
+        destination.setHint("Endereço ou local de destino");
+        body.addView(destination);
+        android.widget.CheckBox overlay = new android.widget.CheckBox(this);
+        overlay.setText("Exibir painel flutuante sobre o mapa");
+        overlay.setChecked(Settings.canDrawOverlays(this));
+        body.addView(overlay);
+        TextView help = label("A viagem GPS começa ao abrir o navegador. Para usar o painel flutuante, autorize a sobreposição no menu.", 13, 0xffb5cddc);
+        body.addView(help);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Navegar")
+                .setView(body).setNeutralButton("Cancelar", null)
+                .setNegativeButton("Waze", null).setPositiveButton("Google Maps", null).create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(view ->
+                    selectNavigator(dialog, destination, overlay.isChecked(), true));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view ->
+                    selectNavigator(dialog, destination, overlay.isChecked(), false));
+        });
+        dialog.show();
+    }
+
+    private void selectNavigator(AlertDialog dialog, EditText input, boolean overlay, boolean waze) {
+        String destination = input.getText().toString().trim();
+        if (destination.isEmpty()) {
+            input.setError("Informe o destino.");
+            return;
+        }
+        Uri uri = waze
+                ? Uri.parse("https://waze.com/ul").buildUpon().appendQueryParameter("q", destination)
+                    .appendQueryParameter("navigate", "yes").appendQueryParameter("utm_source", "helpfix-fuel").build()
+                : Uri.parse("https://www.google.com/maps/dir/").buildUpon().appendQueryParameter("api", "1")
+                    .appendQueryParameter("destination", destination).appendQueryParameter("travelmode", "driving")
+                    .appendQueryParameter("dir_action", "navigate").build();
+        pendingNavigation = new Intent(Intent.ACTION_VIEW, uri).setPackage(waze ? WAZE : MAPS);
+        navigationOverlay = overlay;
+        dialog.dismiss();
+        if (!hasGps()) askGps();
+        else openNavigator(true);
+    }
+
+    private void openNavigator(boolean track) {
+        Intent navigation = pendingNavigation;
+        pendingNavigation = null;
+        if (navigation == null) return;
+        boolean overlay = navigationOverlay;
+        navigationOverlay = false;
+        if (navigation.resolveActivity(getPackageManager()) == null) {
+            navigation.setPackage(null);
+        }
+        if (navigation.resolveActivity(getPackageManager()) == null) {
+            toast("Instale o Waze ou o Google Maps para navegar.");
+            return;
+        }
+        if (track) {
+            send(TrackingService.START);
+            if (overlay && Settings.canDrawOverlays(this)) send(TrackingService.SHOW);
+            else if (overlay) toast("Autorize a sobreposição pelo MENU do Helpfix Fuel.");
+            else if (FuelStore.active(this)) send(TrackingService.HIDE);
+        } else {
+            toast("Permita a localização para registrar a viagem no Helpfix.");
+        }
+        try {
+            startActivity(navigation);
+        } catch (ActivityNotFoundException e) {
+            toast("Não foi possível abrir o navegador escolhido.");
+        }
     }
     private boolean hasGps(){
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED ||
@@ -209,9 +362,16 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int code,String[] perms,int[] results){
         super.onRequestPermissionsResult(code,perms,results);
         if(code!=GPS_CODE)return;
-        if(!hasGps()){pendingTrip=false;pendingOverlay=false;toast("Permita a localização para utilizar o GPS");return;}
+        if(!hasGps()){
+            pendingTrip=false;
+            pendingOverlay=false;
+            if (pendingNavigation != null) openNavigator(false);
+            else toast("Permita a localização para utilizar o GPS");
+            return;
+        }
         if(pendingTrip){pendingTrip=false;startTrip();}
         if(pendingOverlay){pendingOverlay=false;showOverlay();}
+        if (pendingNavigation != null) openNavigator(true);
     }
     @Override protected void onResume(){
         super.onResume();fullscreen();
@@ -223,6 +383,10 @@ public final class MainActivity extends Activity {
         handler.post(uiTick);
     }
     @Override protected void onPause(){handler.removeCallbacks(uiTick);super.onPause();}
+    @Override public void onWindowFocusChanged(boolean focused) {
+        super.onWindowFocusChanged(focused);
+        if (focused) fullscreen();
+    }
     private final Runnable uiTick=new Runnable(){@Override public void run(){
         updateDashboard();handler.postDelayed(this,1000L);
     }};
@@ -232,7 +396,9 @@ public final class MainActivity extends Activity {
         float consumption=FuelStore.get(this,"km_per_l",14f);
         float capacity=FuelStore.get(this,"capacity",46f);
         dashboard.setAccent(FuelStore.accent(this));
+        dashboard.setRadarBanner(TrackingService.radarBanner);
         dashboard.setMetrics(FuelStore.get(this,"speed",0f),fuel,
-            fuel*consumption,capacity,FuelStore.get(this,"distance",0f),FuelStore.active(this));
+            fuel*consumption,capacity,FuelStore.get(this,"distance",0f),FuelStore.active(this),
+            FuelStore.odometer(this));
     }
 }
