@@ -1,0 +1,10 @@
+HELPFIX FUEL | PAINEL AUTOMOTIVO 3.3.0
+
+Este ZIP e o codigo-fonte do Android, nao o APK ja compilado.
+Abra README.md para instalar via GitHub Desktop e compilar o APK via Actions.
+
+O painel principal e horizontal, possui dois relogios com ponteiros azul-ciano,
+autonomia central e MENU recolhido. A velocidade vem do GPS. Combustivel e
+autonomia sao ESTIMATIVAS, nao dados do tanque do veiculo.
+
+O projeto nao foi publicado no seu GitHub. Teste em aparelho apos compilar.

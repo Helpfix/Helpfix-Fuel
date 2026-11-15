@@ -52,7 +52,8 @@ public class TrackingService extends Service implements LocationListener {
 
     @Override public IBinder onBind(Intent i){return null;}
     @Override public int onStartCommand(Intent i,int flags,int startId){
-        String action=i==null?START:i.getAction();
+        String action=i==null?null:i.getAction();
+        if(action==null){stopSelf();return START_NOT_STICKY;}
         if(STOP.equals(action)){FuelStore.prefs(this).edit().putBoolean("active",false).putFloat("speed",0).apply();
             stopLocation();removeOverlay();stopForeground(true);stopSelf();return START_NOT_STICKY;}
         if(HIDE.equals(action)){removeOverlay();return START_STICKY;}
@@ -137,14 +138,16 @@ public class TrackingService extends Service implements LocationListener {
         floating.addView(stack,new FrameLayout.LayoutParams(-1,-1));
         LinearLayout bar=new LinearLayout(this);bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(10),0,dp(3),0);
-        TextView move=new TextView(this);move.setText("≡  HELPFIX SPORT  •  ARRASTE");
+        TextView move=new TextView(this);move.setText("≡  HELPFIX FUEL  •  ARRASTE");
         move.setTextColor(0xffced9e6);move.setTextSize(9);move.setGravity(Gravity.CENTER_VERTICAL);
         bar.addView(move,new LinearLayout.LayoutParams(0,dp(33),1));
         TextView shrink=button("−"),close=button("×");
         bar.addView(shrink);bar.addView(close);stack.addView(bar);
+        int widthPx=Math.max(dp(220),Math.min(dp(480),getResources().getDisplayMetrics().widthPixels-dp(16)));
+        int dashboardH=Math.round(widthPx*0.56f);
         dashboard=new SportGaugeView(this);dashboard.setCompact(true);
-        stack.addView(dashboard,new LinearLayout.LayoutParams(-1,dp(158)));
-        params=new WindowManager.LayoutParams(dp(338),dp(192),WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        stack.addView(dashboard,new LinearLayout.LayoutParams(-1,dashboardH));
+        params=new WindowManager.LayoutParams(widthPx,dashboardH+dp(30),WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT);
         params.gravity=Gravity.TOP|Gravity.START;
@@ -161,7 +164,7 @@ public class TrackingService extends Service implements LocationListener {
             }return false;
         });
         shrink.setOnClickListener(v->{mini=!mini;dashboard.setVisibility(mini?View.GONE:View.VISIBLE);
-            params.height=dp(mini?35:192);try{windowManager.updateViewLayout(floating,params);}catch(Exception ignored){};
+            params.height=mini?dp(35):dashboardH+dp(30);try{windowManager.updateViewLayout(floating,params);}catch(Exception ignored){};
             shrink.setText(mini?"+":"−");});
         close.setOnClickListener(v->removeOverlay());
         try{windowManager.addView(floating,params);}catch(Exception e){floating=null;dashboard=null;return;}
@@ -171,7 +174,8 @@ public class TrackingService extends Service implements LocationListener {
         if(dashboard==null)return;
         float fuel=FuelStore.get(this,"liters",15), kmPerLiter=FuelStore.get(this,"km_per_l",14), tank=FuelStore.get(this,"capacity",46);
         dashboard.setAccent(FuelStore.accent(this));
-        dashboard.setMetrics(FuelStore.get(this,"speed",0),fuel,fuel*kmPerLiter,tank);
+        dashboard.setMetrics(FuelStore.get(this,"speed",0),fuel,fuel*kmPerLiter,tank,
+            FuelStore.get(this,"distance",0),FuelStore.active(this));
     }
     private void removeOverlay(){if(floating!=null){try{windowManager.removeView(floating);}catch(Exception ignored){}
         floating=null;dashboard=null;}}

@@ -1,32 +1,51 @@
-# Helpfix Fuel Sport — 3.2.3
+# Helpfix Fuel — Painel Automotivo 3.3.0
 
-Projeto **Android nativo em Java** para um **novo repositório**, independente do app Helpfix Fuel instalado anteriormente.
+Projeto Android nativo em **Java**, sem dependências de interface externas. Criado para um painel **paisagem**, inspirado na referência visual fornecida pelo usuário: **dois grandes mostradores de ponteiro, iluminação ciano sobre fundo preto e painel central**.
 
-## O que contém
-- Painel esportivo com **3 relógios analógicos**: velocidade (GPS), combustível estimado e autonomia estimada.
-- Três estilos de cor: Racing vermelho, GT azul e Sport verde.
-- Painel flutuante sobre Waze/Google Maps (após permissão do Android).
-- Painel arrastável, minimizável e ocultável.
-- Controle de início/fim da viagem e execução de localização em serviço em primeiro plano.
-- Campos para informar litros atuais, consumo (km/L) e capacidade do tanque.
-- Distância percorrida acumulada e desconto estimado do combustível pelo GPS.
-- GitHub Actions configurado para gerar APK debug em cada push.
+## O que aparece na tela
 
-## Atenção aos limites
-- **Projeto independente**: não preserva automaticamente os módulos, histórico e interface da versão 3.2.2 existente no repositório antigo. Use-o para um novo app/novo repositório, conforme solicitado.
-- Combustível não é medido por sensor/OBD: é uma estimativa baseada na distância GPS e no consumo informado. Para medir corretamente, ajuste os litros após cada abastecimento.
-- GPS depende da permissão e da qualidade do sinal; o sistema pode pausar a aplicação dependendo das restrições de bateria. Não use os valores como substituto de medidores oficiais do carro.
-- O arquivo **não é APK pronto**: a compilação será feita pelo GitHub Actions. O build não foi executado no ambiente de criação deste ZIP.
-- O APK de depuração é assinado automaticamente pelo executor e pode ter uma chave diferente em builds futuros; não conte com atualização por cima. Para atualizações consistentes, configure assinatura de release persistente.
-- O app precisa de testes em aparelho real, especialmente overlays e permissões Android recentes.
+- À esquerda: velocímetro analógico com ponteiro, escala de 0 a 240 km/h e velocidade GPS.
+- À direita: relógio analógico com ponteiro para o percentual **estimado** de gasolina, de 0% a 100%.
+- No meio: **autonomia estimada em km**, a partir dos litros indicados e do consumo médio.
+- Embaixo: barra de viagem, distância, velocidade e litros estimados.
+- A aba **MENU** fica recolhida na tela principal; ao tocar, abre os controles de viagem, abastecimento e estilos.
+- GPS usa o Android `LocationManager`, serviço em primeiro plano com notificação e painel opcional flutuante sobre aplicativos de navegação, mediante permissão do sistema.
 
-## Como enviar pelo GitHub Desktop
-1. No GitHub Desktop, **File → Clone repository** e escolha o repositório novo que você criou.
-2. Descompacte este ZIP e copie **o conteúdo da pasta** para a raiz do repositório clonado (não a pasta inteira).
-3. Na aba **Changes**, insira em Summary: `Helpfix Fuel Sport 3.2.3 - painel esportivo`.
-4. Clique em **Commit to main** e depois em **Push origin**.
-5. Na página do repositório GitHub, entre em **Actions → Build APK - Helpfix Fuel Sport**.
-6. Clique no workflow finalizado e, em **Artifacts**, baixe `HelpfixFuelSport-3.2.3-debug-apk`.
-7. Extraia o artifact e instale `app-debug.apk` no Android para testes. Instalação de fontes desconhecidas pode exigir autorização.
+### Importante sobre o combustível
 
-**Importante:** o repositório é seu. Este pacote não foi publicado nem enviado automaticamente ao GitHub.
+O celular **não** lê o tanque nem o sensor do veículo. O usuário informa litros estimados, capacidade e consumo médio. A cada deslocamento GPS considerado válido, o aplicativo diminui os litros estimados proporcionalmente à distância e calcula a autonomia. Por isso, **não utilize os valores como medidor de combustível real**. Erros de GPS, consumo variável ou parâmetros incorretos afetam o resultado.
+
+Configuração inicial ilustrativa: 15 L, tanque 46 L, 14 km/L. Ajuste no menu para seu carro. Não configure o aplicativo enquanto dirige.
+
+## Enviar ao GitHub pelo GitHub Desktop
+
+1. Extraia este ZIP e copie **o conteúdo da pasta** para a raiz da cópia local do seu repositório, sem criar uma pasta interna extra.
+2. No GitHub Desktop, confira os arquivos alterados, escreva a mensagem de commit e clique em **Commit to main**.
+3. Clique em **Push origin**.
+4. No navegador, abra **Actions > Helpfix Fuel - Compilar APK**, aguarde a execução verde, e baixe o artefato **HelpfixFuel-PainelAutomotivo-3.3.0-APK**.
+5. Extraia o artefato baixado para obter `app-debug.apk`. A compilação ainda depende da execução real do GitHub Actions.
+
+O workflow usa `android-actions/setup-android@v4` e Gradle 8.10.2. Ele instala o Android SDK 35 e executa `gradle --no-daemon --stacktrace assembleDebug`.
+
+## Instalação e permissões
+
+- A tela principal abre em **horizontal**. O menu permanece recolhido ao abrir.
+- Toque em **MENU** para inserir combustível/capacidade/consumo e **INICIAR VIAGEM**.
+- Permita acesso à localização para medir a velocidade pelo GPS.
+- Para mostrar sobre Waze ou Maps, toque em **MOSTRAR SOBRE O WAZE / MAPS**, autorize "exibir sobre outros apps" e arraste o painel pela barra superior. O painel flutuante pode ser minimizado e fechado.
+- Toque em **ENCERRAR VIAGEM** quando terminar.
+- Um APK `debug` deve ser usado apenas para testes. Para distribuição são necessários testes reais e assinatura de release.
+
+## Versões e instalação em paralelo
+
+Este pacote usa `applicationId br.com.helpfix.fuelsport`, mesmo ID do Helpfix Fuel **Sport 3.2.3** para manter a linha de versão. Ele é separado do app original se este usar outro ID. A chave de assinatura debug do GitHub Actions pode variar entre compilações: se a instalação de uma atualização for recusada, desinstale **somente** a edição Sport, sabendo que seus dados locais serão perdidos, ou prepare uma assinatura persistente. Faça backup antes.
+
+## Notas de implementação
+
+- `app/src/main/java/br/com/helpfix/fuelsport/SportGaugeView.java`: instrumentos, ponteiros e desenho do painel em Canvas.
+- `MainActivity.java`: tela imersiva, menu recolhido, GPS, configuração e acionamento do flutuante.
+- `TrackingService.java`: GPS, percurso, serviço em primeiro plano e janela móvel.
+- `FuelStore.java`: preferências locais.
+- `.github/workflows/build-apk.yml`: compilação do APK.
+
+**Status:** projeto-fonte e estrutura gerados; compilação e teste em aparelho precisam ser confirmados. Nenhum arquivo foi publicado no GitHub pela assistência.

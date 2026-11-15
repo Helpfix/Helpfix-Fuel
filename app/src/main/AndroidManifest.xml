@@ -9,11 +9,11 @@
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <application
         android:theme="@android:style/Theme.Material.NoActionBar"
-        android:label="Helpfix Fuel Sport"
+        android:label="Helpfix Fuel | Painel Automotivo"
         android:icon="@android:drawable/ic_menu_compass"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:usesCleartextTraffic="false">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:screenOrientation="sensorLandscape" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

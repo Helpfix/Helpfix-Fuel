@@ -3,89 +3,175 @@ package br.com.helpfix.fuelsport;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RadialGradient;
 import android.graphics.RectF;
+import android.graphics.Shader;
+import android.graphics.Typeface;
 import android.view.View;
 import java.util.Locale;
 
-/** Three car-style analog dials, optimized for a floating map overlay. */
-public class SportGaugeView extends View {
-    private final Paint p = new Paint(3);
-    private int accent = Color.rgb(255, 65, 78);
-    private float speedKmh = 0f;
-    private float fuelLiters = 15f;
-    private float rangeKm = 210f;
-    private float capacity = 46f;
-    private boolean compact = false;
-    public SportGaugeView(Context ctx) { super(ctx); setLayerType(View.LAYER_TYPE_SOFTWARE, null); }
-    public void setMetrics(float speed, float fuel, float range, float tank) {
-        speedKmh=Math.max(0,speed); fuelLiters=Math.max(0,fuel); rangeKm=Math.max(0,range);
-        capacity=Math.max(1,tank); invalidate();
-    }
-    public void setAccent(int color) { accent=color; invalidate(); }
-    public void setCompact(boolean compact) { this.compact=compact; invalidate(); }
+/**
+ * Painel automotivo original, desenhado diretamente no Canvas Android.
+ * Inspirado no formato da referencia: dois relogios analogicos, azul-ciano e preto.
+ * Nenhum dado de combustivel vem de sensor/OBD: litros e autonomia sao estimativas.
+ */
+public final class SportGaugeView extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+    private static final int WHITE = 0xffeaf8ff;
+    private static final int MUTED = 0xff7896ae;
+    private int accent = 0xff00d5ff;
+    private float speed = 0f, liters = 15f, capacity = 46f, autonomy = 210f, distance = 0f;
+    private boolean active = false, compact = false;
+    private final Typeface bold = Typeface.create("sans-serif-condensed", Typeface.BOLD);
+    private final Typeface normal = Typeface.create("sans-serif", Typeface.NORMAL);
 
-    private void color(int c) { p.setColor(c); p.setStyle(Paint.Style.FILL); p.setStrokeWidth(1); p.clearShadowLayer(); }
-    private void text(Canvas c, String s, float x, float y, float size, int col, boolean bold) {
-        color(col); p.setTypeface(bold ? android.graphics.Typeface.create("sans-serif-condensed",android.graphics.Typeface.BOLD)
-                   : android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.NORMAL));
-        p.setTextSize(size); p.setTextAlign(Paint.Align.CENTER); c.drawText(s,x,y,p);
+    public SportGaugeView(Context c) { super(c); setLayerType(View.LAYER_TYPE_SOFTWARE, null); }
+    public void setCompact(boolean value) { compact = value; invalidate(); }
+    public void setAccent(int value) { accent = value; invalidate(); }
+    public void setMetrics(float velocity, float remaining, float range, float tank) {
+        setMetrics(velocity, remaining, range, tank, distance, active);
     }
-    @Override protected void onDraw(Canvas actual) {
-        super.onDraw(actual);
-        float w=getWidth(), h=getHeight();
-        if(w<=0||h<=0)return;
-        float baseW=compact?325:365, baseH=compact?158:213;
-        float scale=Math.min(w/baseW,h/baseH);
-        actual.save();
-        actual.translate((w-baseW*scale)/2f,(h-baseH*scale)/2f);
-        actual.scale(scale,scale);
-        Canvas c=actual;
-        color(Color.rgb(10,14,21));
-        p.setShadowLayer(8f,0,4,0x99000000);
-        c.drawRoundRect(new RectF(3,3,baseW-3,baseH-3),18,18,p);p.clearShadowLayer();
-        color(0xff27303d);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.6f);
-        c.drawRoundRect(new RectF(3,3,baseW-3,baseH-3),18,18,p);
-        color(accent);p.setStyle(Paint.Style.FILL);
-        c.drawRoundRect(new RectF(14,10,74,13),2,2,p);
-        text(c,"HELPFIX  /  SPORT",baseW/2,compact?24:28,compact?11:13,0xffd9e0e8,true);
-        text(c,"GPS • PAINEL ESPORTIVO",baseW/2,compact?36:44,compact?7.5f:9,0xff7e8c9d,false);
-        float cy=compact?96:123;
-        float rMain=compact?46:65;
-        float rSide=compact?31:44;
-gauge(c,baseW/2,cy,rMain,0,240,speedKmh,"VELOCIDADE",String.format(Locale.US,"%.0f",speedKmh),"km/h",true);
-        
-        gauge(c,compact?53:60,cy+6,rSide,0,capacity,fuelLiters,"COMB.",String.format(Locale.US,"%.1f",fuelLiters),"L",false);
-        gauge(c,baseW-(compact?53:60),cy+6,rSide,0,Math.max(100,capacity*24),rangeKm,"AUTON.",String.format(Locale.US,"%.0f",rangeKm),"km",false);
-        if(!compact)text(c,"ESTIMATIVAS: abastecimento e consumo informados",baseW/2,201,9,0xff8996a4,false);
+    public void setMetrics(float velocity, float remaining, float range, float tank, float driven, boolean tripActive) {
+        speed = clamp(velocity, 0f, 240f);
+        liters = Math.max(0f, remaining);
+        capacity = Math.max(1f, tank);
+        autonomy = Math.max(0f, range);
+        distance = Math.max(0f, driven);
+        active = tripActive;
+        invalidate();
+    }
+    private static float clamp(float x, float a, float b) {return Math.max(a, Math.min(b,x));}
+    private void fill(int color){ p.reset();p.setAntiAlias(true);p.setSubpixelText(true);p.setColor(color);p.setStyle(Paint.Style.FILL); }
+    private void stroke(int color,float width){ fill(color);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(width); }
+    private void text(Canvas c,String t,float x,float y,float size,int color,boolean isBold){
+        fill(color);p.setTypeface(isBold?bold:normal);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(size);
+        c.drawText(t,x,y,p);
+    }
+    private void line(Canvas c,float x1,float y1,float x2,float y2,int color,float width){
+        stroke(color,width);c.drawLine(x1,y1,x2,y2,p);
+    }
+    private float rad(float degrees){return (float)Math.toRadians(degrees);}
+    private int alpha(int color,int a){return (color & 0x00ffffff)|((a & 255)<<24);}
+    private void border(Canvas c,RectF r,int color,float width,float radius){stroke(color,width);c.drawRoundRect(r,radius,radius,p);}
+
+    @Override protected void onDraw(Canvas screen){
+        super.onDraw(screen);
+        if(getWidth() == 0 || getHeight() == 0) return;
+        final float W=1000f,H=560f;
+        float scale=Math.min(getWidth()/W, getHeight()/H);
+        screen.drawColor(0xff040911);
+        screen.save();
+        screen.translate((getWidth()-W*scale)*0.5f,(getHeight()-H*scale)*0.5f);
+        screen.scale(scale,scale);
+        Canvas c=screen;
+
+        fill(0xff07101b);
+        p.setShader(new LinearGradient(0,0,0,H,0xff101b28,0xff01050b,Shader.TileMode.CLAMP));
+        c.drawRoundRect(new RectF(7,7,993,553),41,41,p);p.setShader(null);
+        border(c,new RectF(9,9,991,551),0xff415b70,6,40);
+        border(c,new RectF(18,18,982,542),0xff0e2d44,2,32);
+        stroke(alpha(accent,48),1.3f);
+        c.drawLine(37,82,963,82,p);
+
+        text(c,"HELPFIX FUEL",500,53,25,WHITE,true);
+        text(c,"PAINEL AUTOMOTIVO  •  GPS",500,74,13,0xff69b3d4,false);
+        text(c,"VELOCIDADE GPS",242,116,18,0xffdceefa,true);
+        text(c,"COMBUSTÍVEL ESTIMADO",758,116,18,0xffdceefa,true);
+
+        drawDial(c,242,293,177,240f,speed,true);
+        drawDial(c,758,293,177,100f,clamp(liters/capacity*100f,0f,100f),false);
+        drawCenter(c);
+
+        fill(0xff091927);c.drawRoundRect(new RectF(47,474,953,527),12,12,p);
+        border(c,new RectF(47,474,953,527),0xff1b445d,1,12);
+        text(c,"VIAGEM",102,496,12,MUTED,false);
+        text(c,active?"ATIVA":"PARADA",103,515,17,active?0xff5fe9b9:0xffafc0cf,true);
+        text(c,"DISTÂNCIA",301,496,12,MUTED,false);
+        text(c,String.format(Locale.getDefault(),"%.1f km",distance),301,515,18,WHITE,true);
+        text(c,"VELOCIDADE",542,496,12,MUTED,false);
+        text(c,String.format(Locale.getDefault(),"%.0f km/h",speed),542,515,18,WHITE,true);
+        text(c,"COMBUSTÍVEL",807,496,12,MUTED,false);
+        text(c,String.format(Locale.getDefault(),"%.1f L",liters),807,515,18,WHITE,true);
+        if(!compact)text(c,"Os valores de combustível e autonomia são estimados; não são leituras do veículo.",500,541,11,0xff7b93a5,false);
         c.restore();
     }
-    private void gauge(Canvas c,float cx,float cy,float r,float min,float max,float value,
-                       String title,String big,String unit,boolean isMain) {
-        color(0xff171f2b);c.drawCircle(cx,cy,r+4,p);
-        color(0xff263241);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(isMain?9:5);
-        c.drawArc(new RectF(cx-r+5,cy-r+5,cx+r-5,cy+r-5),140,260,false,p);
-        color(accent);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(isMain?7:4);p.setStrokeCap(Paint.Cap.ROUND);
-        float frac=Math.max(0,Math.min(1,(value-min)/Math.max(0.01f,max-min)));
-        c.drawArc(new RectF(cx-r+5,cy-r+5,cx+r-5,cy+r-5),140,260*frac,false,p);
-        p.setStrokeCap(Paint.Cap.BUTT);
-        for(int i=0;i<=10;i++) {
-            float rad=(float)Math.toRadians(140+i*26);
-            float inner=r-(isMain?14:10), outer=r-(isMain?6:6);
-            color(i<=frac*10 ? 0xffc7d1de : 0xff49586a);
-            p.setStrokeWidth(i%2==0?2:1);
-            c.drawLine(cx+(float)Math.cos(rad)*inner,cy+(float)Math.sin(rad)*inner,
-                       cx+(float)Math.cos(rad)*outer,cy+(float)Math.sin(rad)*outer,p);
+
+    private void drawDial(Canvas c,float cx,float cy,float r,float max,float value,boolean velocity){
+        fill(0xff00040c);p.setShadowLayer(23,0,0,alpha(accent,60));c.drawCircle(cx,cy,r+12,p);p.clearShadowLayer();
+        fill(0xff0d2b40);c.drawCircle(cx,cy,r+10,p);
+        stroke(alpha(accent,195),3f);c.drawCircle(cx,cy,r+4,p);
+        stroke(0xff05314a,6f);c.drawCircle(cx,cy,r-9,p);
+        fill(0xff06101b);
+        p.setShader(new RadialGradient(cx-24,cy-43,r*1.35f,new int[]{0xff11344b,0xff030a14,0xff000309},null,Shader.TileMode.CLAMP));
+        c.drawCircle(cx,cy,r-15,p);p.setShader(null);
+        stroke(alpha(accent,65),1.1f);c.drawCircle(cx,cy,r-27,p);
+
+        final float start=135f,sweep=270f;
+        RectF arc=new RectF(cx-r+21,cy-r+21,cx+r-21,cy+r-21);
+        stroke(0xff17354a,7f);c.drawArc(arc,start,sweep,false,p);
+        stroke(alpha(accent,175),4f);p.setStrokeCap(Paint.Cap.ROUND);
+        c.drawArc(arc,start,sweep*clamp(value/max,0,1),false,p);p.setStrokeCap(Paint.Cap.BUTT);
+        int steps=velocity?48:40;
+        for(int i=0;i<=steps;i++) {
+            float f=(float)i/steps, a=rad(start+f*sweep);
+            boolean major=velocity?(i%8==0):(i%10==0);
+            boolean medium=velocity?(i%4==0):(i%5==0);
+            float inner=r-(major?47:(medium?35:30));
+            float outer=r-24;
+            int col=i<=steps*(value/max) ? (major?WHITE:accent) : (major?0xffaec1ce:0xff4784a2);
+            line(c,cx+(float)Math.cos(a)*inner,cy+(float)Math.sin(a)*inner,
+                   cx+(float)Math.cos(a)*outer,cy+(float)Math.sin(a)*outer,col,major?3f:1.5f);
+            if(major){
+                String label=velocity?String.valueOf(i*5):String.valueOf((int)(i*2.5f));
+                float labelR=r-68;
+                text(c,label,cx+(float)Math.cos(a)*labelR,
+                        cy+(float)Math.sin(a)*labelR+6,velocity?20:19,WHITE,true);
+            }
         }
-        float theta=(float)Math.toRadians(140+frac*260);
-        float len=r*(isMain?0.70f:0.62f);
-        color(0xfff8fafc);p.setStrokeWidth(isMain?2.5f:1.8f);
-        c.drawLine(cx,cy,cx+(float)Math.cos(theta)*len,cy+(float)Math.sin(theta)*len,p);
-        color(accent); c.drawCircle(cx,cy,isMain?4:3,p);
-        float titleY=cy-r*(isMain?0.35f:0.32f);
-        text(c,title,cx,titleY,isMain?8.5f:7,0xffa8b5c4,true);
-        text(c,big,cx,cy+(isMain?19:13),isMain?33:(big.length()>4?17:19),0xfff6f8fb,true);
-        text(c,unit,cx,cy+(isMain?33:24),isMain?10:8,0xff9eabba,false);
+        float angle=rad(start+sweep*clamp(value/max,0,1));
+        float tip=r-75;
+        float tx=cx+(float)Math.cos(angle)*tip;
+        float ty=cy+(float)Math.sin(angle)*tip;
+        float bx=cx-(float)Math.cos(angle)*30;
+        float by=cy-(float)Math.sin(angle)*30;
+        // Ponteiro com corpo iluminado e pino central como num painel real.
+        p.setShadowLayer(9,0,0,accent);
+        line(c,bx,by,tx,ty,alpha(accent,220),10f);
+        p.clearShadowLayer();
+        line(c,bx,by,tx,ty,0xffd6fbff,3f);
+        fill(0xff0e3550);c.drawCircle(cx,cy,23,p);
+        fill(accent);c.drawCircle(cx,cy,13,p);
+        fill(WHITE);c.drawCircle(cx,cy,6,p);
+        fill(0xff092c42);c.drawCircle(cx,cy,2.4f,p);
+        if(velocity){
+            text(c,"km/h",cx,cy+99,22,0xff74c7e5,true);
+            text(c,String.format(Locale.getDefault(),"%.0f",speed),cx,cy+126,39,WHITE,true);
+        } else {
+            text(c,"TANQUE",cx,cy+94,17,0xff74c7e5,true);
+            text(c,String.format(Locale.getDefault(),"%.0f%%",clamp(liters/capacity*100f,0f,100f)),cx,cy+126,39,WHITE,true);
+        }
+    }
+
+    private void drawCenter(Canvas c){
+        // Placa central escura encaixada entre os dois instrumentos.
+        Path plate=new Path();
+        plate.moveTo(439,223);plate.lineTo(561,223);
+        plate.lineTo(584,254);plate.lineTo(584,382);
+        plate.lineTo(560,412);plate.lineTo(440,412);
+        plate.lineTo(416,382);plate.lineTo(416,254);plate.close();
+        fill(0xff071320);c.drawPath(plate,p);
+        stroke(alpha(accent,180),2f);c.drawPath(plate,p);
+        stroke(alpha(accent,90),2f);c.drawLine(439,239,561,239,p);
+        text(c,"AUTONOMIA",500,278,18,0xff9fcee3,true);
+        text(c,"ESTIMADA",500,298,12,MUTED,false);
+        String value=String.format(Locale.getDefault(),"%.0f",autonomy);
+        float size=value.length()>4?52:(value.length()>3?61:76);
+        text(c,value,500,366,size,WHITE,true);
+        text(c,"KM RESTANTES",500,390,15,accent,true);
+        text(c,"●",478,416,13,active?0xff42df9e:0xff9baabc,true);
+        text(c,active?"GPS ATIVO":"INICIAR VIAGEM",523,416,12,active?0xff9edccf:MUTED,false);
     }
 }
