@@ -1,4 +1,4 @@
-# Helpfix Fuel — Painel Automotivo 3.3.0
+# Helpfix Fuel — Painel Automotivo 3.3.1
 
 Projeto Android nativo em **Java**, sem dependências de interface externas. Criado para um painel **paisagem**, inspirado na referência visual fornecida pelo usuário: **dois grandes mostradores de ponteiro, iluminação ciano sobre fundo preto e painel central**.
 
@@ -8,7 +8,7 @@ Projeto Android nativo em **Java**, sem dependências de interface externas. Cri
 - À direita: relógio analógico com ponteiro para o percentual **estimado** de gasolina, de 0% a 100%.
 - No meio: **autonomia estimada em km**, a partir dos litros indicados e do consumo médio.
 - Embaixo: barra de viagem, distância, velocidade e litros estimados.
-- A aba **MENU** fica recolhida na tela principal; ao tocar, abre os controles de viagem, abastecimento e estilos.
+- A aba **MENU** fica recolhida na tela principal. Ao tocar, abre os controles de viagem, os ajustes de combustível e iluminação e a calculadora de custos.
 - GPS usa o Android `LocationManager`, serviço em primeiro plano com notificação e painel opcional flutuante sobre aplicativos de navegação, mediante permissão do sistema.
 
 ### Importante sobre o combustível
@@ -17,12 +17,20 @@ O celular **não** lê o tanque nem o sensor do veículo. O usuário informa lit
 
 Configuração inicial ilustrativa: 15 L, tanque 46 L, 14 km/L. Ajuste no menu para seu carro. Não configure o aplicativo enquanto dirige.
 
+## Quanto custa rodar com o Celta?
+
+Abra **MENU → 5. Quanto custa rodar com o Celta?**. Informe o preço da gasolina por litro e a distância total, incluindo a volta se houver. O simulador mostra litros, custo por quilômetro e custo de gasolina no percurso. Se você informar o valor da entrega, ele calcula quanto sobra depois da gasolina.
+
+Em **Registrar**, informe o odômetro do carro, os litros e o valor pago. Marque **Completei o tanque** quando encher o tanque. Depois de dois registros de tanque cheio, a medição usa a distância entre eles e soma os litros e valores dos abastecimentos feitos depois do primeiro registro até o segundo, incluindo o segundo. A partir daí, a simulação usa o consumo medido. Até a primeira medição, ela usa o consumo médio configurado. O último abastecimento fornece o preço inicial da simulação, que pode ser editado.
+
+O saldo estimado do tanque e o consumo usado pelo painel são editáveis em **Ajustar combustível e consumo**.
+
 ## Enviar ao GitHub pelo GitHub Desktop
 
 1. Extraia este ZIP e copie **o conteúdo da pasta** para a raiz da cópia local do seu repositório, sem criar uma pasta interna extra.
 2. No GitHub Desktop, confira os arquivos alterados, escreva a mensagem de commit e clique em **Commit to main**.
 3. Clique em **Push origin**.
-4. No navegador, abra **Actions > Helpfix Fuel - Compilar APK**, aguarde a execução verde, e baixe o artefato **HelpfixFuel-PainelAutomotivo-3.3.0-APK**.
+4. No navegador, abra **Actions > Helpfix Fuel - Compilar APK**, aguarde a execução verde, e baixe o artefato **HelpfixFuel-PainelAutomotivo-3.3.1-APK**.
 5. Extraia o artefato baixado para obter `app-debug.apk`. A compilação ainda depende da execução real do GitHub Actions.
 
 O workflow usa `android-actions/setup-android@v4` e Gradle 8.10.2. Ele instala o Android SDK 35 e executa `gradle --no-daemon --stacktrace assembleDebug`.

@@ -107,6 +107,7 @@ public final class MainActivity extends Activity {
             FuelStore.prefs(this).edit().putBoolean("active",false).putFloat("speed",0).apply();
             updateDashboard();toast("Viagem encerrada");
         });
+        addAction(list,FuelCostMenu.TITLE,0xff075167,()->new FuelCostMenu(this).show());
         addAction(list,"⛽  AJUSTAR COMBUSTÍVEL E CONSUMO",0xff1c435b,()->fuelDialog());
         addAction(list,"✦  COR DO PAINEL",0xff1d394e,()->styleDialog());
         TextView notice=label("Velocidade: GPS do celular.\nCombustível (%), litros e autonomia (km) são ESTIMADOS a partir do abastecimento, consumo médio e distância registrada. Sem leitura do tanque/OBD.\n\nEvite configurar enquanto dirige.",12,0xffa9bfd0);

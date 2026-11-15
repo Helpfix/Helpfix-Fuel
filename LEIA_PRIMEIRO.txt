@@ -1,4 +1,4 @@
-HELPFIX FUEL | PAINEL AUTOMOTIVO 3.3.0
+HELPFIX FUEL | PAINEL AUTOMOTIVO 3.3.1
 
 Este ZIP e o codigo-fonte do Android, nao o APK ja compilado.
 Abra README.md para instalar via GitHub Desktop e compilar o APK via Actions.
@@ -6,5 +6,8 @@ Abra README.md para instalar via GitHub Desktop e compilar o APK via Actions.
 O painel principal e horizontal, possui dois relogios com ponteiros azul-ciano,
 autonomia central e MENU recolhido. A velocidade vem do GPS. Combustivel e
 autonomia sao ESTIMATIVAS, nao dados do tanque do veiculo.
+
+Abra MENU > 5. Quanto custa rodar com o Celta? para registrar abastecimentos
+e simular custo de gasolina por quilometro, por viagem ou por entrega.
 
 O projeto nao foi publicado no seu GitHub. Teste em aparelho apos compilar.
