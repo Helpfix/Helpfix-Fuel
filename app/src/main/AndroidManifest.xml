@@ -19,7 +19,7 @@
     <application
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:label="Helpfix Fuel | Painel Automotivo"
-        android:icon="@android:drawable/ic_menu_compass"
+        android:icon="@mipmap/ic_helpfix_fuel"
         android:allowBackup="false"
         android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:screenOrientation="sensorLandscape" android:exported="true">

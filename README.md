@@ -1,4 +1,4 @@
-# Helpfix Fuel — Painel Automotivo 3.3.4
+# Helpfix Fuel — Painel Automotivo 3.3.5
 
 Projeto Android nativo em **Java**, sem dependências de interface externas. Criado para um painel **paisagem**, inspirado na referência visual fornecida pelo usuário: **dois grandes mostradores de ponteiro, iluminação ciano sobre fundo preto e painel central**.
 
@@ -39,11 +39,11 @@ Abra **MENU → Navegar com Waze ou Google Maps**, informe o destino e toque no 
 
 ## Enviar ao GitHub pelo GitHub Desktop
 
-1. Extraia este ZIP. Na cópia local do repositório, substitua a pasta `app` pela pasta `app` do ZIP e copie os demais arquivos, inclusive `.github`, para a raiz. Isso remove os arquivos antigos do módulo retirado. Preserve a pasta `.git` do repositório.
+1. Extraia este ZIP. Na cópia local do repositório, substitua a pasta `app` pela pasta `app` do ZIP e copie os demais arquivos, inclusive `.github`, para a raiz. Confira se o novo ícone em `app/src/main/res/mipmap-xxxhdpi/ic_helpfix_fuel.png` e o workflow aparecem nas alterações. Preserve a pasta `.git` do repositório.
 2. No GitHub Desktop, confira os arquivos alterados, escreva a mensagem de commit e clique em **Commit to main**.
 3. Clique em **Push origin**.
-4. No navegador, abra **Actions > Helpfix Fuel - Compilar APK**, aguarde a execução verde, e baixe o artefato **HelpfixFuel-PainelAutomotivo-3.3.4-APK**.
-5. Extraia o artefato desta execução para obter `app-debug.apk`. Depois de instalar, confira **3.3.4** abaixo do título Helpfix Fuel.
+4. No navegador, abra **Actions > Helpfix Fuel - Compilar APK**, aguarde a execução verde, e baixe o artefato **HelpfixFuel-PainelAutomotivo-3.3.5-APK**.
+5. Extraia o artefato desta execução para obter `app-debug.apk`. Depois de instalar, confira **3.3.5** abaixo do título Helpfix Fuel.
 
 O workflow usa `android-actions/setup-android@v4` e Gradle 8.10.2. Ele instala o Android SDK 35 e executa `gradle --no-daemon --stacktrace assembleDebug`.
 
@@ -68,4 +68,4 @@ Este pacote usa `applicationId br.com.helpfix.fuelsport`, mesmo ID do Helpfix Fu
 - `FuelStore.java`: preferências locais.
 - `.github/workflows/build-apk.yml`: compilação do APK.
 
-**Validação local:** verificações de código e cálculos. A compilação do APK e a execução no aparelho precisam ser confirmadas.
+**Validação desta versão:** referência do ícone, consistência da versão e lógica da checagem do workflow com saída simulada. A compilação do APK e a execução no aparelho precisam ser confirmadas.
