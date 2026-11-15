@@ -2,7 +2,6 @@ package br.com.helpfix.fuelsport;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -27,18 +26,12 @@ public final class SportGaugeView extends View {
     private static final Locale BR = Locale.forLanguageTag("pt-BR");
     private double odometer = Double.NaN;
     private boolean active = false, compact = false;
-    private String radarBanner = "";
     private final Typeface bold = Typeface.create("sans-serif-condensed", Typeface.BOLD);
     private final Typeface normal = Typeface.create("sans-serif", Typeface.NORMAL);
 
-    public SportGaugeView(Context c) { super(c); setLayerType(View.LAYER_TYPE_SOFTWARE, null); }
+    public SportGaugeView(Context c) { super(c); }
     public void setCompact(boolean value) { compact = value; invalidate(); }
     public void setAccent(int value) { accent = value; invalidate(); }
-    public void setRadarBanner(String value) {
-        if (value.equals(radarBanner)) return;
-        radarBanner = value;
-        invalidate();
-    }
     public void setMetrics(float velocity, float remaining, float range, float tank,
             float driven, boolean tripActive, double odometerKm) {
         odometer = odometerKm;
@@ -92,14 +85,7 @@ public final class SportGaugeView extends View {
         float menuWidth = compact ? 0 : 130 * getResources().getDisplayMetrics().density / scale;
         float headerWidth = Math.max(24, width - 2 * menuWidth);
         fittedText(c, "HELPFIX FUEL", middle, 37, 25, headerWidth, WHITE);
-        if (active && !radarBanner.isEmpty()) {
-            float halfBanner = Math.min(230, Math.min(width * .28f, headerWidth / 2));
-            fill(0xff4d300b);
-            c.drawRoundRect(middle - halfBanner, 46, middle + halfBanner, 70, 8, 8, p);
-            fittedText(c, radarBanner, middle, 63, 17, halfBanner * 2 - 16, 0xffffd68f);
-        } else {
-            fittedText(c, "PAINEL AUTOMOTIVO  •  GPS", middle, 62, 13, headerWidth, 0xff69b3d4);
-        }
+        fittedText(c, "GPS  •  " + BuildConfig.VERSION_NAME, middle, 62, 15, headerWidth, 0xff9fcee3);
 
         fittedText(c, "VELOCIDADE GPS", leftDial, 97, 18, leftDial * 1.8f, WHITE);
         fittedText(c, "COMBUSTÍVEL ESTIMADO", rightDial, 97, 18, leftDial * 1.8f, WHITE);

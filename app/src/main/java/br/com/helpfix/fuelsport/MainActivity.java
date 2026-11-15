@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ResultReceiver;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
@@ -45,7 +46,6 @@ public final class MainActivity extends Activity {
     private boolean navigationOverlay;
     private static final String WAZE = "com.waze";
     private static final String MAPS = "com.google.android.apps.maps";
-    private final int CYAN=0xff00d7ff;
 
     private int dp(float n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
     private GradientDrawable rounded(int fill,int outline,int radius){
@@ -85,6 +85,9 @@ public final class MainActivity extends Activity {
         if (state != null) {
             pendingNavigation = state.getParcelable("pending_navigation");
             navigationOverlay = state.getBoolean("navigation_overlay");
+            pendingTrip = state.getBoolean("pending_trip");
+            pendingOverlay = state.getBoolean("pending_overlay");
+            pendingSystemOverlay = state.getBoolean("pending_system_overlay");
         }
         FrameLayout root=new FrameLayout(this);
         root.setBackgroundColor(0xff040911);
@@ -105,11 +108,19 @@ public final class MainActivity extends Activity {
         // Painel de opcoes que so aparece quando se toca em MENU.
         menuPane=new LinearLayout(this);menuPane.setOrientation(LinearLayout.VERTICAL);
         menuPane.setBackground(rounded(0xf50b1723,0xff2b6c89,16));
-        FrameLayout.LayoutParams paneParams=new FrameLayout.LayoutParams(
-            Math.min(dp(495),getResources().getDisplayMetrics().widthPixels-dp(24)),
-            FrameLayout.LayoutParams.MATCH_PARENT,Gravity.RIGHT|Gravity.TOP);
-        paneParams.setMargins(0,dp(56),dp(8),dp(8));
+        FrameLayout.LayoutParams paneParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.END | Gravity.TOP);
+        paneParams.setMargins(dp(8), dp(56), dp(8), dp(8));
         root.addView(menuPane,paneParams);
+        root.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            int available = right - left - root.getPaddingLeft() - root.getPaddingRight() - dp(16);
+            int preferred = Math.min(dp(495), available);
+            if (preferred > 0 && paneParams.width != preferred) {
+                paneParams.width = preferred;
+                menuPane.setLayoutParams(paneParams);
+            }
+        });
         menuPane.setVisibility(View.GONE);
         buildMenu();
 
@@ -128,6 +139,9 @@ public final class MainActivity extends Activity {
         super.onSaveInstanceState(state);
         state.putParcelable("pending_navigation", pendingNavigation);
         state.putBoolean("navigation_overlay", navigationOverlay);
+        state.putBoolean("pending_trip", pendingTrip);
+        state.putBoolean("pending_overlay", pendingOverlay);
+        state.putBoolean("pending_system_overlay", pendingSystemOverlay);
     }
     private void toggleMenu(){
         menuOpen=!menuOpen;
@@ -141,18 +155,16 @@ public final class MainActivity extends Activity {
         menuPane.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(13),dp(2),dp(13),dp(12));scroll.addView(list);
-        addAction(list,"▶  INICIAR VIAGEM (GPS)",0xff065573,()->startTrip());
         addAction(list,"Novo abastecimento",0xff075167,
                 ()->new FuelCostMenu(this,this::refreshFuelDisplays).newFill());
         addAction(list,"Ajustar odômetro (km)",0xff1c435b,this::odometerDialog);
+        addAction(list,"▶  INICIAR VIAGEM (GPS)",0xff065573,this::startTrip);
         addAction(list,"▣  MOSTRAR SOBRE O WAZE / MAPS",0xff075167,()->showOverlay());
         addAction(list,"Navegar com Waze ou Google Maps",0xff075167,this::navigationDialog);
-        addAction(list,"Avisos de radar",0xff1c435b,()->RadarSettings.show(this));
         addAction(list,"◻  OCULTAR PAINEL FLUTUANTE",0xff202f40,()->send(TrackingService.HIDE));
         addAction(list,"■  ENCERRAR VIAGEM",0xff552936,()->{
             if(FuelStore.active(this))send(TrackingService.STOP);
-            FuelStore.prefs(this).edit().putBoolean("active",false).putFloat("speed",0).apply();
-            updateDashboard();toast("Viagem encerrada");
+            toast("Viagem encerrada");
         });
         addAction(list,FuelCostMenu.TITLE,0xff075167,()->new FuelCostMenu(this,this::refreshFuelDisplays).show());
         addAction(list,"⛽  AJUSTAR COMBUSTÍVEL E CONSUMO",0xff1c435b,()->fuelDialog());
@@ -312,16 +324,19 @@ public final class MainActivity extends Activity {
             return;
         }
         if (track) {
-            send(TrackingService.START);
-            if (overlay && Settings.canDrawOverlays(this)) send(TrackingService.SHOW);
-            else if (overlay) toast("Autorize a sobreposição pelo MENU do Helpfix Fuel.");
-            else if (FuelStore.active(this)) send(TrackingService.HIDE);
+            boolean permitted = Settings.canDrawOverlays(this);
+            if (overlay && !permitted) toast("Autorize a sobreposição pelo MENU do Helpfix Fuel.");
+            requestTrip(TrackingService.START, overlay && permitted, navigation);
         } else {
             toast("Permita a localização para registrar a viagem no Helpfix.");
+            launchNavigation(navigation);
         }
+    }
+
+    private void launchNavigation(Intent navigation) {
         try {
             startActivity(navigation);
-        } catch (ActivityNotFoundException e) {
+        } catch (ActivityNotFoundException | SecurityException e) {
             toast("Não foi possível abrir o navegador escolhido.");
         }
     }
@@ -337,7 +352,7 @@ public final class MainActivity extends Activity {
     }
     private void startTrip(){
         if(!hasGps()){pendingTrip=true;askGps();return;}
-        send(TrackingService.START);toast("Monitoramento GPS iniciado");
+        requestTrip(TrackingService.START, null, null);
     }
     private void showOverlay(){
         if(!hasGps()){pendingOverlay=true;askGps();return;}
@@ -345,18 +360,48 @@ public final class MainActivity extends Activity {
             pendingSystemOverlay=true;
             Intent permission=new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:"+getPackageName()));
-            startActivity(permission);return;
+            try {
+                startActivity(permission);
+            } catch (ActivityNotFoundException | SecurityException e) {
+                pendingSystemOverlay = false;
+                toast("Abra as configurações do Android para permitir a sobreposição.");
+            }
+            return;
         }
-        if(!FuelStore.active(this))send(TrackingService.START);
-        send(TrackingService.SHOW);
-        toast("Painel flutuante ativado");
+        requestTrip(TrackingService.SHOW, null, null);
+    }
+
+    private void requestTrip(String action, Boolean overlay, Intent navigation) {
+        Intent service = new Intent(this, TrackingService.class).setAction(action);
+        if (overlay != null) service.putExtra(TrackingService.OVERLAY_REQUESTED, overlay.booleanValue());
+        service.putExtra(TrackingService.START_RESULT, new ResultReceiver(handler) {
+            @Override protected void onReceiveResult(int status, Bundle data) {
+                if (isFinishing() || isDestroyed()) return;
+                if (status == TrackingService.NO_LOCATION) {
+                    toast("Ative a localização e confira a permissão de GPS preciso.");
+                } else if (status == TrackingService.START_FAILED) {
+                    toast("O Android bloqueou o GPS. Confira a permissão e tente novamente com o Helpfix aberto.");
+                } else if (status == TrackingService.OVERLAY_FAILED) {
+                    toast("GPS iniciado. Confira a permissão do painel flutuante.");
+                } else if (navigation == null) {
+                    toast(TrackingService.SHOW.equals(action) ? "Painel flutuante ativado" : "Monitoramento GPS iniciado");
+                }
+                updateDashboard();
+                if (navigation != null) launchNavigation(navigation);
+            }
+        });
+        try {
+            if (FuelStore.active(this)) startService(service);
+            else startForegroundService(service);
+        } catch (SecurityException | IllegalStateException e) {
+            toast("Não foi possível iniciar o GPS. Confira as permissões.");
+            if (navigation != null) launchNavigation(navigation);
+        }
     }
     private void send(String action){
         Intent service=new Intent(this,TrackingService.class);service.setAction(action);
         try{
-            if(TrackingService.START.equals(action)||TrackingService.SHOW.equals(action))
-                startForegroundService(service);
-            else if(FuelStore.active(this))startService(service);
+            if(FuelStore.active(this))startService(service);
         }catch(Exception e){toast("Não foi possível iniciar o serviço. Confira as permissões.");}
     }
     @Override public void onRequestPermissionsResult(int code,String[] perms,int[] results){
@@ -396,7 +441,6 @@ public final class MainActivity extends Activity {
         float consumption=FuelStore.get(this,"km_per_l",14f);
         float capacity=FuelStore.get(this,"capacity",46f);
         dashboard.setAccent(FuelStore.accent(this));
-        dashboard.setRadarBanner(TrackingService.radarBanner);
         dashboard.setMetrics(FuelStore.get(this,"speed",0f),fuel,
             fuel*consumption,capacity,FuelStore.get(this,"distance",0f),FuelStore.active(this),
             FuelStore.odometer(this));

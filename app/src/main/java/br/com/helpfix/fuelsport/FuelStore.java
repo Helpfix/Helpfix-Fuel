@@ -8,7 +8,7 @@ public final class FuelStore {
     public static final String PREFS = "fuel_sport_prefs";
     public static SharedPreferences prefs(Context context){return context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);}
     public static float get(Context c,String k,float fallback){return prefs(c).getFloat(k,fallback);}
-    public static boolean active(Context c){return prefs(c).getBoolean("active",false);}
+    public static boolean active(Context c){return TrackingService.isRunning();}
     private static final String ODOMETER_BASE = "odometer_base";
     private static final String ODOMETER_GPS_BASE = "odometer_gps_base";
     static final String INTEGRATED_FILL = "integrated_last_fill";

@@ -26,9 +26,18 @@ jobs:
           gradle-version: '8.10.2'
       - name: Compilar APK debug
         run: gradle --no-daemon --stacktrace assembleDebug
+      - name: Conferir versao do APK
+        shell: bash
+        run: |
+          metadados="$("${ANDROID_HOME}/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk)"
+          printf '%s\n' "$metadados" | sed -n '1p'
+          codigo=$(awk '/^[[:space:]]*versionCode / { print $2 }' app/build.gradle)
+          versao=$(awk -F"'" '/^[[:space:]]*versionName / { print $2 }' app/build.gradle)
+          [[ -n "$codigo" && -n "$versao" ]]
+          [[ "$metadados" == *"name='br.com.helpfix.fuelsport' versionCode='$codigo' versionName='$versao'"* ]]
       - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
         with:
-          name: HelpfixFuel-PainelAutomotivo-3.3.3-APK
+          name: HelpfixFuel-PainelAutomotivo-3.3.4-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error

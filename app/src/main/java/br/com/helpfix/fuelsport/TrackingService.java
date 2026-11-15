@@ -17,7 +17,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
-import android.os.SystemClock;
+import android.os.ResultReceiver;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -28,7 +28,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.graphics.drawable.GradientDrawable;
 
-import java.util.Locale;
 
 /** GPS trip tracking and movable Android overlay. Starts only from visible Activity. */
 public class TrackingService extends Service implements LocationListener {
@@ -41,14 +40,18 @@ public class TrackingService extends Service implements LocationListener {
     private static final int NOTIFICATION_ID=73;
     private LocationManager lm;
     private Location previous;
-    static String radarBanner = "";
-    private RadarAlerts radarAlerts;
-    private final Runnable clearRadar = () -> {
-        radarBanner = "";
-        updateOverlay();
-    };
-    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
-    private long lastFixElapsed=0L;
+    static final String START_RESULT = "trip_start_result";
+    static final String OVERLAY_REQUESTED = "trip_overlay_requested";
+    static final int STARTED = 1;
+    static final int NO_LOCATION = 2;
+    static final int START_FAILED = 3;
+    static final int OVERLAY_FAILED = 4;
+    private static boolean running;
+
+    static boolean isRunning() {
+        return running;
+    }
+
     private WindowManager windowManager;
     private FrameLayout floating;
     private SportGaugeView dashboard;
@@ -58,24 +61,71 @@ public class TrackingService extends Service implements LocationListener {
     private float touchX,touchY;
 
     @Override public IBinder onBind(Intent i){return null;}
-    @Override public int onStartCommand(Intent i,int flags,int startId){
-        String action=i==null?null:i.getAction();
-        if(action==null){stopSelf();return START_NOT_STICKY;}
-        if(STOP.equals(action)){FuelStore.prefs(this).edit().putBoolean("active",false).putFloat("speed",0).apply();
-            stopLocation();removeOverlay();stopForeground(true);stopSelf();return START_NOT_STICKY;}
-        if(HIDE.equals(action)){removeOverlay();return START_STICKY;}
-        // Service is foreground to keep GPS alive while map is on screen.
-        makeForeground();
-        if(START.equals(action)){
-            if (!FuelStore.active(this) || lm == null) {
-                FuelStore.prefs(this).edit().putBoolean("active",true).putFloat("speed",0).apply();
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        String action = intent == null ? null : intent.getAction();
+        if (STOP.equals(action)) {
+            endTrip();
+            return START_NOT_STICKY;
+        }
+        if (HIDE.equals(action) || REFRESH.equals(action)) {
+            if (running) {
+                if (HIDE.equals(action)) removeOverlay();
+                else updateOverlay();
+            } else {
+                stopSelf();
             }
-            startLocation();
-        } else if(FuelStore.active(this)) startLocation();
-        if(SHOW.equals(action))addOverlay();
-        if(REFRESH.equals(action))updateOverlay();
-        return START_STICKY;
+            return START_NOT_STICKY;
+        }
+        if (!START.equals(action) && !SHOW.equals(action)) {
+            if (!running) stopSelf();
+            return START_NOT_STICKY;
+        }
+
+        ResultReceiver result = intent.getParcelableExtra(START_RESULT);
+        int status;
+        try {
+            if (!running) {
+                makeForeground();
+                if (startLocation()) {
+                    FuelStore.prefs(this).edit().putFloat("speed", 0).apply();
+                    running = true;
+                }
+            }
+            status = running ? STARTED : NO_LOCATION;
+        } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
+            android.util.Log.w("HelpfixFuel", "Falha ao iniciar a localização", e);
+            status = START_FAILED;
+        }
+        if (status == STARTED) {
+            if (SHOW.equals(action) || intent.getBooleanExtra(OVERLAY_REQUESTED, false)) {
+                try {
+                    addOverlay();
+                } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
+                    android.util.Log.w("HelpfixFuel", "Falha ao abrir painel flutuante", e);
+                    removeOverlay();
+                }
+                if (floating == null) status = OVERLAY_FAILED;
+            } else if (intent.hasExtra(OVERLAY_REQUESTED)) {
+                removeOverlay();
+            }
+        } else {
+            endTrip();
+        }
+        if (result != null) result.send(status, null);
+        return START_NOT_STICKY;
     }
+
+    private void endTrip() {
+        running = false;
+        previous = null;
+        FuelStore.prefs(this).edit().putFloat("speed", 0).apply();
+        stopLocation();
+        removeOverlay();
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf();
+    }
+
     private void makeForeground(){
         NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         if(Build.VERSION.SDK_INT>=26){NotificationChannel channel=new NotificationChannel(CHANNEL,"Helpfix Fuel Sport - Viagem",NotificationManager.IMPORTANCE_LOW);
@@ -91,19 +141,38 @@ public class TrackingService extends Service implements LocationListener {
         if(Build.VERSION.SDK_INT>=29) startForeground(NOTIFICATION_ID,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
         else startForeground(NOTIFICATION_ID,n);
     }
-    private void startLocation(){
-        if(lm!=null)return;
-        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
-                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return;
-        lm=(LocationManager)getSystemService(LOCATION_SERVICE);
-        try{
-            if(lm.isProviderEnabled(LocationManager.GPS_PROVIDER))lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000L,1f,this);
-            if(lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER))lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,3000L,5f,this);
-        }catch(SecurityException | IllegalArgumentException e){lm=null;}
+    private boolean startLocation() {
+        lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (lm == null || (Build.VERSION.SDK_INT >= 28 && !lm.isLocationEnabled())) return false;
+        boolean precise = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+        boolean approximate = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+        boolean registered = false;
+        if (precise && lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 1f, this);
+            registered = true;
+        }
+        if ((precise || approximate) && lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 3000L, 5f, this);
+            registered = true;
+        }
+        return registered;
     }
-    private void stopLocation(){if(lm!=null){try{lm.removeUpdates(this);}catch(SecurityException ignored){}lm=null;}}
+
+    private void stopLocation() {
+        if (lm != null) {
+            try {
+                lm.removeUpdates(this);
+            } catch (SecurityException e) {
+                android.util.Log.w("HelpfixFuel", "Permissão de localização revogada", e);
+            }
+            lm = null;
+        }
+    }
+
     @Override public void onLocationChanged(Location loc){
-        if(!FuelStore.active(this) || loc==null)return;
+        if(!running || loc==null)return;
         if(loc.hasAccuracy() && loc.getAccuracy()>100f)return;
         float speed=loc.hasSpeed()?Math.max(0,loc.getSpeed()*3.6f):0;
         float kmStep=0;
@@ -118,12 +187,7 @@ public class TrackingService extends Service implements LocationListener {
                 }
             }
         }
-        if (radarAlerts == null) radarAlerts = new RadarAlerts(this);
-        radarBanner = radarAlerts.update(this, loc, previous, speed);
-        main.removeCallbacks(clearRadar);
-        if (!radarBanner.isEmpty()) main.postDelayed(clearRadar, 10_000);
         previous=loc;
-        lastFixElapsed=SystemClock.elapsedRealtime();
         float consumption=Math.max(1,FuelStore.get(this,"km_per_l",14f));
         float fuel=Math.max(0,FuelStore.get(this,"liters",15f)-kmStep/consumption);
         float driven=FuelStore.get(this,"distance",0f)+kmStep;
@@ -146,6 +210,8 @@ public class TrackingService extends Service implements LocationListener {
         if(floating!=null){updateOverlay();return;}
         if(Build.VERSION.SDK_INT<23 || !Settings.canDrawOverlays(this))return;
         windowManager=(WindowManager)getSystemService(WINDOW_SERVICE);
+        if (windowManager == null) return;
+        mini = false;
         floating=new FrameLayout(this); floating.setBackground(bg());floating.setClipChildren(false);
         LinearLayout stack=new LinearLayout(this);stack.setOrientation(LinearLayout.VERTICAL);
         floating.addView(stack,new FrameLayout.LayoutParams(-1,-1));
@@ -156,48 +222,61 @@ public class TrackingService extends Service implements LocationListener {
         bar.addView(move,new LinearLayout.LayoutParams(0,dp(33),1));
         TextView shrink=button("−"),close=button("×");
         bar.addView(shrink);bar.addView(close);stack.addView(bar);
-        int widthPx=Math.max(dp(220),Math.min(dp(480),getResources().getDisplayMetrics().widthPixels-dp(16)));
-        int dashboardH=Math.round(widthPx*0.56f);
+        android.util.DisplayMetrics display = getResources().getDisplayMetrics();
+        int barHeight = dp(33);
+        int maxWidthByHeight = Math.round((display.heightPixels - barHeight - dp(16)) / .56f);
+        int widthPx = Math.min(dp(480), Math.min(display.widthPixels - dp(16), maxWidthByHeight));
+        if (widthPx <= 0) {
+            removeOverlay();
+            return;
+        }
+        int dashboardH = Math.round(widthPx * .56f);
         dashboard=new SportGaugeView(this);dashboard.setCompact(true);
         stack.addView(dashboard,new LinearLayout.LayoutParams(-1,dashboardH));
-        params=new WindowManager.LayoutParams(widthPx,dashboardH+dp(30),WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        params=new WindowManager.LayoutParams(widthPx,dashboardH+barHeight,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT);
         params.gravity=Gravity.TOP|Gravity.START;
-        params.x=FuelStore.prefs(this).getInt("window_x",20);params.y=FuelStore.prefs(this).getInt("window_y",120);
+        params.x = clampPosition(FuelStore.prefs(this).getInt("window_x", 20), display.widthPixels - widthPx);
+        params.y = clampPosition(FuelStore.prefs(this).getInt("window_y", 120), display.heightPixels - params.height);
         move.setOnTouchListener((v,event)->{
             switch(event.getActionMasked()){
                 case MotionEvent.ACTION_DOWN:touchX=event.getRawX();touchY=event.getRawY();startX=params.x;startY=params.y;return true;
                 case MotionEvent.ACTION_MOVE:
-                    params.x=Math.max(0,startX+Math.round(event.getRawX()-touchX));
-                    params.y=Math.max(0,startY+Math.round(event.getRawY()-touchY));
+                    params.x = clampPosition(startX + Math.round(event.getRawX() - touchX),
+                            getResources().getDisplayMetrics().widthPixels - params.width);
+                    params.y = clampPosition(startY + Math.round(event.getRawY() - touchY),
+                            getResources().getDisplayMetrics().heightPixels - params.height);
                     try{windowManager.updateViewLayout(floating,params);}catch(Exception ignored){}return true;
                 case MotionEvent.ACTION_UP:
                     FuelStore.prefs(this).edit().putInt("window_x",params.x).putInt("window_y",params.y).apply();return true;
             }return false;
         });
         shrink.setOnClickListener(v->{mini=!mini;dashboard.setVisibility(mini?View.GONE:View.VISIBLE);
-            params.height=mini?dp(35):dashboardH+dp(30);try{windowManager.updateViewLayout(floating,params);}catch(Exception ignored){};
+            params.height = mini ? barHeight : dashboardH + barHeight;
+            params.y = clampPosition(params.y, getResources().getDisplayMetrics().heightPixels - params.height);
+            try{windowManager.updateViewLayout(floating,params);}catch(Exception ignored){}
             shrink.setText(mini?"+":"−");});
         close.setOnClickListener(v->removeOverlay());
         try{windowManager.addView(floating,params);}catch(Exception e){floating=null;dashboard=null;return;}
         updateOverlay();
     }
+    private int clampPosition(int value, int max) {
+        return Math.max(0, Math.min(max, value));
+    }
     private void updateOverlay(){
         if(dashboard==null)return;
         float fuel=FuelStore.get(this,"liters",15), kmPerLiter=FuelStore.get(this,"km_per_l",14), tank=FuelStore.get(this,"capacity",46);
         dashboard.setAccent(FuelStore.accent(this));
-        dashboard.setRadarBanner(radarBanner);
         dashboard.setMetrics(FuelStore.get(this,"speed",0),fuel,fuel*kmPerLiter,tank,
             FuelStore.get(this,"distance",0),FuelStore.active(this),FuelStore.odometer(this));
     }
     private void removeOverlay(){if(floating!=null){try{windowManager.removeView(floating);}catch(Exception ignored){}
         floating=null;dashboard=null;}}
     @Override public void onDestroy(){
+        running = false;
+        FuelStore.prefs(this).edit().putFloat("speed", 0).apply();
         stopLocation();
-        main.removeCallbacks(clearRadar);
-        radarBanner = "";
-        if (radarAlerts != null) radarAlerts.close();
         removeOverlay();
         super.onDestroy();
     }

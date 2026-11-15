@@ -1,4 +1,4 @@
-# Helpfix Fuel — Painel Automotivo 3.3.3
+# Helpfix Fuel — Painel Automotivo 3.3.4
 
 Projeto Android nativo em **Java**, sem dependências de interface externas. Criado para um painel **paisagem**, inspirado na referência visual fornecida pelo usuário: **dois grandes mostradores de ponteiro, iluminação ciano sobre fundo preto e painel central**.
 
@@ -33,23 +33,17 @@ Em **Registrar**, informe o odômetro do carro, os litros e o valor pago. Marque
 
 O saldo estimado do tanque e o consumo usado pelo painel são editáveis em **Ajustar combustível e consumo**.
 
-## Waze, Google Maps e avisos de radar
+## Waze e Google Maps
 
 Abra **MENU → Navegar com Waze ou Google Maps**, informe o destino e toque no navegador que prefere usar. O Helpfix inicia o registro GPS se você tiver concedido a permissão de localização. Para ver o painel sobre a navegação, autorize a sobreposição no Android e marque a opção de painel flutuante. A escolha do endereço encontrado e da rota acontece no navegador.
 
-Em **MENU → Avisos de radar**, baixe a base online, selecione 250, 400 ou 600 metros e salve com os avisos ativados. O Helpfix usa o GPS durante a viagem para mostrar radares fixos próximos à sua direção de deslocamento. A faixa aparece no painel principal e no flutuante. É possível ativar a leitura em voz alta em português. O limite só aparece quando consta na base. A base baixada funciona offline e pode ser atualizada manualmente.
-
-A base inicial cobre os pontos mapeados em Porto Alegre e parte da Região Metropolitana. O Helpfix estima a aproximação em linha reta, por isso vias próximas ou paralelas podem gerar avisos. Confira a sinalização da via. Os avisos exibidos pelos navegadores seguem a configuração de cada um.
-
-Dados de radares fixos © [colaboradores do OpenStreetMap](https://www.openstreetmap.org/copyright), licença ODbL, obtidos pela [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API).
-
 ## Enviar ao GitHub pelo GitHub Desktop
 
-1. Extraia este ZIP e copie **o conteúdo da pasta** para a raiz da cópia local do seu repositório, sem criar uma pasta interna extra.
+1. Extraia este ZIP. Na cópia local do repositório, substitua a pasta `app` pela pasta `app` do ZIP e copie os demais arquivos, inclusive `.github`, para a raiz. Isso remove os arquivos antigos do módulo retirado. Preserve a pasta `.git` do repositório.
 2. No GitHub Desktop, confira os arquivos alterados, escreva a mensagem de commit e clique em **Commit to main**.
 3. Clique em **Push origin**.
-4. No navegador, abra **Actions > Helpfix Fuel - Compilar APK**, aguarde a execução verde, e baixe o artefato **HelpfixFuel-PainelAutomotivo-3.3.3-APK**.
-5. Extraia o artefato baixado para obter `app-debug.apk`. A compilação ainda depende da execução real do GitHub Actions.
+4. No navegador, abra **Actions > Helpfix Fuel - Compilar APK**, aguarde a execução verde, e baixe o artefato **HelpfixFuel-PainelAutomotivo-3.3.4-APK**.
+5. Extraia o artefato desta execução para obter `app-debug.apk`. Depois de instalar, confira **3.3.4** abaixo do título Helpfix Fuel.
 
 O workflow usa `android-actions/setup-android@v4` e Gradle 8.10.2. Ele instala o Android SDK 35 e executa `gradle --no-daemon --stacktrace assembleDebug`.
 
@@ -74,4 +68,4 @@ Este pacote usa `applicationId br.com.helpfix.fuelsport`, mesmo ID do Helpfix Fu
 - `FuelStore.java`: preferências locais.
 - `.github/workflows/build-apk.yml`: compilação do APK.
 
-**Status:** projeto-fonte e estrutura gerados; compilação e teste em aparelho precisam ser confirmados. Nenhum arquivo foi publicado no GitHub pela assistência.
+**Validação local:** verificações de código e cálculos. A compilação do APK e a execução no aparelho precisam ser confirmadas.
