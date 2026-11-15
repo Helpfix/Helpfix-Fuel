@@ -54,7 +54,8 @@ public class SportGaugeView extends View {
         float cy=compact?96:123;
         float rMain=compact?46:65;
         float rSide=compact?31:44;
-        gauge(c,baseW/2,cy,rMain,0,240,260f,speedKmh,"VELOCIDADE",String.format(Locale.US,"%.0f",speedKmh),"km/h",true);
+gauge(c,baseW/2,cy,rMain,0,240,speedKmh,"VELOCIDADE",String.format(Locale.US,"%.0f",speedKmh),"km/h",true);
+        
         gauge(c,compact?53:60,cy+6,rSide,0,capacity,fuelLiters,"COMB.",String.format(Locale.US,"%.1f",fuelLiters),"L",false);
         gauge(c,baseW-(compact?53:60),cy+6,rSide,0,Math.max(100,capacity*24),rangeKm,"AUTON.",String.format(Locale.US,"%.0f",rangeKm),"km",false);
         if(!compact)text(c,"ESTIMATIVAS: abastecimento e consumo informados",baseW/2,201,9,0xff8996a4,false);
