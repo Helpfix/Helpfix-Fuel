@@ -1,0 +1,13 @@
+HELPFIX FUEL SPORT 3.2.3 — NOVO APLICATIVO
+
+1. Este ZIP contém o CÓDIGO-FONTE do aplicativo Android.
+2. O estilo do painel é esportivo automotivo: 3 mostradores circulares com ponteiros,
+   fundo preto e detalhes em vermelho, azul ou verde (trocáveis dentro do app).
+3. Use GitHub Desktop > Clone Repository > copie os conteúdos para dentro da pasta do repositório.
+4. Changes > Summary: Helpfix Fuel Sport 3.2.3 - painel esportivo
+5. Commit to main > Push origin.
+6. Site GitHub > Actions > Build APK - Helpfix Fuel Sport > Artifacts > baixe APK.
+7. Build e funcionamento no celular AINDA precisam de testes; este arquivo não é um APK.
+
+É UM PROJETO NOVO E INDEPENDENTE (não inclui toda a versão 3.2.2 antiga).
+Este projeto não altera nem sobrescreve o aplicativo antigo.
