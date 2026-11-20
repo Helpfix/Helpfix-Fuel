@@ -1,35 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
-    <queries>
-        <package android:name="com.waze" />
-        <package android:name="com.google.android.apps.maps" />
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <category android:name="android.intent.category.BROWSABLE" />
-            <data android:scheme="https" />
-        </intent>
-    </queries>
-    <application
-        android:theme="@android:style/Theme.Material.NoActionBar"
-        android:label="Helpfix Fuel | Painel Automotivo"
-        android:icon="@mipmap/ic_helpfix_fuel"
-        android:allowBackup="false"
-        android:usesCleartextTraffic="false">
-        <activity android:name=".MainActivity" android:screenOrientation="sensorLandscape" android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-        <service android:name=".TrackingService"
-            android:exported="false"
-            android:foregroundServiceType="location" />
-    </application>
-</manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="br.com.helpfix.fuelrace" android:versionCode="2" android:versionName="1.1">
+<uses-sdk android:minSdkVersion="23" android:targetSdkVersion="32"/>
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+<uses-feature android:name="android.hardware.location.gps" android:required="false"/>
+<application android:label="Helpfix Fuel Race" android:allowBackup="false" android:theme="@android:style/Theme.Material.NoActionBar">
+<activity android:name=".Panel" android:exported="true" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|keyboardHidden|screenSize"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+</application></manifest>

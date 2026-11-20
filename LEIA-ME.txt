@@ -1,0 +1,18 @@
+HELPFIX FUEL RACE • Android 6 ou superior
+
+Primeiro uso
+Instale o APK no celular. Abra Registrar leitura e digite o odômetro sem separador de milhar (exemplo 202621). Se souber o total no tanque, escolha essa opção. Caso contrário, basta salvar o odômetro. A média inicial de 14 km/L é ajustável. A localização precisa é solicitada ao tocar no botão GPS. Gire o aparelho com a rotação automática habilitada.
+
+Versão 1.1
+Toque em Iniciar viagem para acumular distância GPS em primeiro plano e Parar viagem para congelar o total. A viagem mais recente fica salva. O ponteiro laranja mede de 0 a 1000 metros a cada quilômetro. O número abaixo mostra o odômetro total estimado. Em Rastreio, marque onde estacionou e depois use Ver no mapa. Uma nova marca substitui a anterior.
+
+Durante o uso
+O velocímetro usa GPS em primeiro plano. Quando perde o sinal, mostra um traço. A distância GPS atualiza provisoriamente o combustível entre leituras. Digitar o odômetro real reconcilia esse trecho, inclusive depois de dirigir com o app fechado. Use a leitura real atual para registrar cada abastecimento. Os dados ficam no aparelho.
+Total no tanque inicia um período de medição. Abastecer adiciona o volume ao saldo estimado. Se o saldo anterior era desconhecido, a autonomia cobre somente os litros registrados. Sem referência de combustível, o app estima os litros gastos pela diferença dos odômetros. Alterações de km/L se aplicam aos trechos futuros.
+
+Atualizar no telefone
+Abra o novo APK no mesmo aparelho e toque em Atualizar, mantendo a instalação atual.
+
+Gerar uma atualização no Windows
+Extraia a pasta Fuel inteira. Abra-a no Android Studio com JDK 17 e SDK Android 35. Em app/build.gradle aumente versionCode e ajuste versionName. A interface fica em app/src/main/assets. Use a tarefa Gradle :app:assembleRelease ou execute gradlew.bat assembleRelease a partir da pasta Fuel. A primeira compilação precisa de internet. O APK gerado fica em app/build/outputs/apk/release/app-release.apk. Mantenha applicationId, a pasta assinatura e a chave dos dados helpfix-fuel-v1 para atualizar sobre esta instalação.
+Guarde este projeto em local privado. A pasta assinatura contém a chave e a senha exclusivas desta distribuição. Compartilhe apenas o APK com quem for utilizar o aplicativo.

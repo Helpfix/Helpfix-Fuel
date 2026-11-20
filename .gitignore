@@ -1,10 +1,5 @@
+assinatura/
+local.properties
 .gradle/
 .idea/
-*.iml
-local.properties
-/build/
-/app/build/
-/captures/
-*.jks
-*.keystore
-.DS_Store
+**/build/
